@@ -1,0 +1,68 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: a2dbb643b8a53d562fd5a527d856b2091e8af165d51e3d284bd03ba207260b0b
+
+name:           simple-parser
+version:        0.1.0
+description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
+homepage:       https://github.com/ejconlon/simple-parser#readme
+bug-reports:    https://github.com/ejconlon/simple-parser/issues
+author:         Eric Conlon
+maintainer:     ejconlon@gmail.com
+copyright:      (c) 2020 Eric Conlon
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/ejconlon/simple-parser
+
+library
+  exposed-modules:
+      Simpleparser.Main
+  other-modules:
+      Paths_simple_parser
+  hs-source-dirs:
+      src
+  default-extensions: ConstraintKinds DeriveFunctor DeriveFoldable DeriveGeneric DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses Rank2Types TypeApplications TypeFamilies
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds
+  build-depends:
+      base >=4.12 && <5
+  default-language: Haskell2010
+
+executable simple-parser-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_simple_parser
+  hs-source-dirs:
+      app
+  default-extensions: ConstraintKinds DeriveFunctor DeriveFoldable DeriveGeneric DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses Rank2Types TypeApplications TypeFamilies
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.12 && <5
+    , simple-parser
+  default-language: Haskell2010
+
+test-suite simple-parser-test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      Test.Simpleparser.SimpleTest
+      Paths_simple_parser
+  hs-source-dirs:
+      test
+  default-extensions: ConstraintKinds DeriveFunctor DeriveFoldable DeriveGeneric DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GADTs GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses Rank2Types TypeApplications TypeFamilies
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.12 && <5
+    , simple-parser
+    , tasty
+    , tasty-hunit
+  default-language: Haskell2010
