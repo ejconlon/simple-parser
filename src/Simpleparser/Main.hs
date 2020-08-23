@@ -1,4 +1,4 @@
-module Simpleparser.Main where
+module SimpleParser.Main where
 
 main :: IO ()
 main = putStrLn "hello, world"

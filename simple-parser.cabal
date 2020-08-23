@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a2dbb643b8a53d562fd5a527d856b2091e8af165d51e3d284bd03ba207260b0b
+-- hash: 288ad9484a09a37bfd4a4640f728d1e65f73b0add894d68cb953f52554fb911a
 
 name:           simple-parser
 version:        0.1.0
@@ -26,7 +26,7 @@ source-repository head
 
 library
   exposed-modules:
-      Simpleparser.Main
+      SimpleParser.Main
   other-modules:
       Paths_simple_parser
   hs-source-dirs:
@@ -54,7 +54,7 @@ test-suite simple-parser-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
-      Test.Simpleparser.SimpleTest
+      Test.SimpleParser.SimpleTest
       Paths_simple_parser
   hs-source-dirs:
       test

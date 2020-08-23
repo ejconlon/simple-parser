@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Test.Tasty (defaultMain, testGroup)
-import Test.Simpleparser.SimpleTest (testSimple)
+import Test.SimpleParser.SimpleTest (testSimple)
 
 main :: IO ()
-main = defaultMain (testGroup "Simpleparser" [testSimple])
+main = defaultMain (testGroup "SimpleParser" [testSimple])
