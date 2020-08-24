@@ -15,8 +15,15 @@ description: Please see the README on GitHub at <https://github.com/ejconlon/sim
 
 dependencies:
 - base >= 4.12 && < 5
+- containers >= 0.6.2.1 && < 1
+- exceptions >= 0.10.4 && < 1
+- list-t >= 1.0.4 && < 2
+- microlens >= 0.4.11.2 && < 1
+- mtl >= 2.2.2 && < 3
+- transformers >= 0.5.6.2 && < 1
 
 default-extensions:
+  - BangPatterns
   - ConstraintKinds
   - DeriveFunctor
   - DeriveFoldable
