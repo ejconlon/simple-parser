@@ -7,14 +7,14 @@ module SimpleParser.Parser
   ) where
 
 import Control.Applicative (Alternative (..))
-import Control.Monad (MonadPlus (..), ap)
+import Control.Monad (MonadPlus (..), ap, (>=>))
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.State (MonadState (..))
 import Control.Monad.Trans (MonadTrans (..))
 import Data.Foldable (toList)
 import ListT (ListT (..))
-import qualified ListT as ListT
+import qualified ListT
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
 
 newtype ParserT e s m a = ParserT { runParserT :: s -> ListT m (ParseResult e s a) }
@@ -23,12 +23,12 @@ newtype ParserT e s m a = ParserT { runParserT :: s -> ListT m (ParseResult e s 
 type Parser e s a = ParserT e s Identity a
 
 instance Monad m => Applicative (ParserT e s m) where
-  pure a = ParserT (\s -> pure (ParseResult (ParseSuccess a) s))
+  pure a = ParserT (pure . ParseResult (ParseSuccess a))
   (<*>) = ap
 
 instance Monad m => Monad (ParserT e s m) where
   return = pure
-  parser >>= f = ParserT (\s -> runParserT parser s >>= go) where
+  parser >>= f = ParserT (runParserT parser >=> go) where
     go (ParseResult v t) =
       case v of
         ParseError e -> pure (ParseResult (ParseError e) t)
@@ -43,8 +43,8 @@ instance Monad m => MonadPlus (ParserT e s m) where
   mplus = (<|>)
 
 instance Monad m => MonadError e (ParserT e s m) where
-  throwError e = ParserT (\s -> pure (ParseResult (ParseError e) s))
-  catchError parser handler = ParserT (\s -> ListT (go empty (runParserT parser s))) where
+  throwError e = ParserT (pure . ParseResult (ParseError e))
+  catchError parser handler = ParserT (ListT . go empty . runParserT parser) where
     go !acc listt = do
       m <- ListT.uncons listt
       case m of
@@ -81,7 +81,7 @@ branchParser = start . toList where
       Just (a, rest) -> pure (Just (a, rest))
 
 suppressParser :: Monad m => ParserT e s m a -> ParserT e s m a
-suppressParser parser = ParserT (\s -> ListT (go [] (runParserT parser s))) where
+suppressParser parser = ParserT (ListT . go [] . runParserT parser) where
   go !acc listt = do
     m <- ListT.uncons listt
     case m of

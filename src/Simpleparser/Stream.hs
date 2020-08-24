@@ -11,7 +11,6 @@ module SimpleParser.Stream
 
 import Control.Monad.Identity
 
--- TODO StateT MaybeT
 newtype StreamT s m a = StreamT
   { runStreamT :: s -> m (Maybe (a, s))
   } deriving (Functor)
