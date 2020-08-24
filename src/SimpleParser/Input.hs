@@ -100,12 +100,12 @@ satisfyInput p = do
     Just c | p c -> pure c
     _ -> empty
 
-foldInputWhile :: Monad m => (c -> x -> (Bool, x)) -> x -> InputT c e s m x
-foldInputWhile f = go where
+foldInputWhile :: Monad m => (c -> x -> (Bool, x)) -> (x -> x) -> x -> InputT c e s m x
+foldInputWhile f g = go where
   go !x = do
     m <- popInput
     case m of
-      Nothing -> pure x
+      Nothing -> pure (g x)
       Just c ->
         let (ok, newX) = f c x
         in if ok
@@ -113,7 +113,7 @@ foldInputWhile f = go where
           else pure x
 
 takeInputWhile :: Monad m => (c -> Bool) -> InputT c e s m [c]
-takeInputWhile pcate = fmap reverse (foldInputWhile append []) where
+takeInputWhile pcate = fmap reverse (foldInputWhile append id []) where
   append x xs = if pcate x then (True, x:xs) else (False, xs)
 
 dropInputWhile :: Monad m => (c -> Bool) -> InputT c e s m ()
