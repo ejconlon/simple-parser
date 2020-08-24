@@ -7,6 +7,7 @@ import Control.Monad.Except (MonadError (..))
 import Data.Foldable (asum)
 import Prelude
 import SimpleParser
+import SimpleParser.Examples.Json (Json (..), JsonF (..), parseJson)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -406,6 +407,43 @@ test_silence_fail_both =
         [ ("non-empty", InputOutput "hi" [])
         ]
   in testParserTrees parser cases
+
+testJsonCase :: TestName -> String -> [Json] -> TestTree
+testJsonCase name str expected = testCase ("json " <> name) $ do
+  let actual = parseJson str
+  actual @?= expected
+
+testJsonTrees :: [(TestName, String, [Json])] -> [TestTree]
+testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
+
+test_json :: [TestTree]
+test_json =
+  let nullVal = Json (JsonNull)
+      trueVal = Json (JsonBool True)
+      falseVal = Json (JsonBool False)
+      arrVal = Json . JsonArray
+      strVal = Json . JsonString
+      objVal = Json . JsonObject
+      cases =
+        [ ("empty", "", [])
+        , ("bad", "bad", [])
+        , ("null", "null", [nullVal])
+        , ("true", "true", [trueVal])
+        , ("false", "false", [falseVal])
+        , ("arr0", "[]", [arrVal []])
+        , ("arr1", "[null]", [arrVal [nullVal]])
+        , ("arr2", "[null, false]", [arrVal [nullVal, falseVal]])
+        , ("arr3", "[null, false, true]", [arrVal [nullVal, falseVal, trueVal]])
+        , ("arrx", "[null,]", [])
+        , ("str0", "\"\"", [strVal ""])
+        , ("str1", "\"x\"", [strVal "x"])
+        , ("str2", "\"xy\"", [strVal "xy"])
+        , ("str3", "\"xyz\"", [strVal "xyz"])
+        , ("obj0", "{}", [objVal []])
+        , ("obj1", "{\"x\": true}", [objVal [("x", trueVal)]])
+        , ("obj2", "{\"x\": true, \"y\": false}", [objVal [("x", trueVal), ("y", falseVal)]])
+        ]
+  in testJsonTrees cases
 
 main :: IO ()
 main = $(defaultMainGenerator)

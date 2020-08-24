@@ -22,6 +22,7 @@ module SimpleParser.Input
   , branchInput
   , suppressInput
   , defaultInput
+  , optionalInput
   , silenceInput
   , greedyStarInput
   , greedyStarInput_
@@ -42,8 +43,8 @@ import Data.Maybe (isNothing)
 import ListT (ListT (..))
 import qualified ListT
 import SimpleParser.Parser (ParserT (..), branchParser, defaultParser, filterParser, greedyPlusParser,
-                            greedyPlusParser_, greedyStarParser, greedyStarParser_, reflectParser, silenceParser,
-                            suppressParser)
+                            greedyPlusParser_, greedyStarParser, greedyStarParser_, optionalParser, reflectParser,
+                            silenceParser, suppressParser)
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
 import SimpleParser.Stream (Stream, StreamT, runStreamT)
 
@@ -159,6 +160,9 @@ suppressInput = adaptInput suppressParser
 
 defaultInput :: Monad m => a -> InputT c e s m a -> InputT c e s m a
 defaultInput = adaptInput . defaultParser
+
+optionalInput :: Monad m => InputT c e s m a -> InputT c e s m (Maybe a)
+optionalInput = adaptInput optionalParser
 
 silenceInput :: Monad m => InputT c e s m a -> InputT c e s m a
 silenceInput = adaptInput silenceParser

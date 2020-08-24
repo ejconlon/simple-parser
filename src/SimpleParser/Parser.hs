@@ -7,6 +7,7 @@ module SimpleParser.Parser
   , branchParser
   , suppressParser
   , defaultParser
+  , optionalParser
   , silenceParser
   , greedyStarParser
   , greedyStarParser_
