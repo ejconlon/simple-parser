@@ -13,7 +13,7 @@ cicompress:
 
 .PHONY: build
 build:
-	stack build
+	stack build --test --no-run-tests
 
 .PHONY: clean
 clean:
