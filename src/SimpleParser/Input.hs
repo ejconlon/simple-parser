@@ -103,13 +103,13 @@ satisfyInput p = do
 foldInputWhile :: Monad m => (c -> x -> (Bool, x)) -> (x -> x) -> x -> InputT c e s m x
 foldInputWhile f g = go where
   go !x = do
-    m <- popInput
+    m <- peekInput
     case m of
       Nothing -> pure (g x)
       Just c ->
         let (ok, newX) = f c x
         in if ok
-          then go newX
+          then popInput *> go newX
           else pure x
 
 takeInputWhile :: Monad m => (c -> Bool) -> InputT c e s m [c]
@@ -119,9 +119,9 @@ takeInputWhile pcate = fmap reverse (foldInputWhile append id []) where
 dropInputWhile :: Monad m => (c -> Bool) -> InputT c e s m ()
 dropInputWhile pcate = go where
   go = do
-    m <- popInput
+    m <- peekInput
     case m of
-      Just c | pcate c -> go
+      Just c | pcate c -> popInput *> go
       _ -> pure ()
 
 charInput :: (Monad m, Eq c) => c -> InputT c e s m c

@@ -408,6 +408,30 @@ test_silence_fail_both =
         ]
   in testParserTrees parser cases
 
+test_take_while :: [TestTree]
+test_take_while =
+  let parser = takeInputWhile (=='h') :: TestParser String
+      cases =
+        [ ("empty", InputOutput "" [parseSuccessResult "" (ListStreamState 0 "")])
+        , ("non-match", InputOutput "i" [parseSuccessResult "" (ListStreamState 0 "i")])
+        , ("match", InputOutput "hi" [parseSuccessResult "h" (ListStreamState 1 "i")])
+        , ("match 2", InputOutput "hhi" [parseSuccessResult "hh" (ListStreamState 2 "i")])
+        , ("match end", InputOutput "hh" [parseSuccessResult "hh" (ListStreamState 2 "")])
+        ]
+  in testParserTrees parser cases
+
+test_drop_while :: [TestTree]
+test_drop_while =
+  let parser = dropInputWhile (=='h') :: TestParser ()
+      cases =
+        [ ("empty", InputOutput "" [parseSuccessResult () (ListStreamState 0 "")])
+        , ("non-match", InputOutput "i" [parseSuccessResult () (ListStreamState 0 "i")])
+        , ("match", InputOutput "hi" [parseSuccessResult () (ListStreamState 1 "i")])
+        , ("match 2", InputOutput "hhi" [parseSuccessResult () (ListStreamState 2 "i")])
+        , ("match end", InputOutput "hh" [parseSuccessResult () (ListStreamState 2 "")])
+        ]
+  in testParserTrees parser cases
+
 testJsonCase :: TestName -> String -> [Json] -> TestTree
 testJsonCase name str expected = testCase ("json " <> name) $ do
   let actual = parseJson str
