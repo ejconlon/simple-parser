@@ -5,8 +5,8 @@ license:             BSD3
 author:              "Eric Conlon"
 maintainer:          "ejconlon@gmail.com"
 copyright:           "(c) 2020 Eric Conlon"
-category:            Parsers
-synopsis:            A simple parser combinator library
+category:            Parsing
+synopsis:            Simple parser combinators
 
 extra-source-files:
 - README.md

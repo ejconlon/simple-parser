@@ -3,12 +3,19 @@ module SimpleParser.Result
   , ParseValue (..)
   , parseSuccessResult
   , parseErrorResult
+  , parseValue
   ) where
 
 data ParseValue e a =
     ParseError !e
   | ParseSuccess !a
   deriving (Eq, Show, Functor, Foldable, Traversable)
+
+parseValue :: (e -> r) -> (a -> r) -> ParseValue e a -> r
+parseValue onError onSuccess value =
+  case value of
+    ParseError e -> onError e
+    ParseSuccess a -> onSuccess a
 
 data ParseResult e s a = ParseResult
   { prValue :: !(ParseValue e a)
