@@ -7,7 +7,12 @@ module SimpleParser.Input
   , peekInput
   , popInput
   , isEndInput
+  , endInput
+  , skipInput
+  , satisfyInput
+  , charInput
   , branchInput
+  , adaptInput
   , suppressInput
   ) where
 
@@ -57,8 +62,31 @@ popInput = InputT $ ReaderT $ \stream ->
 isEndInput :: Monad m => InputT c e s m Bool
 isEndInput = isNothing <$> peekInput
 
+endInput :: Monad m => InputT c e s m ()
+endInput = do
+  m <- peekInput
+  maybe (pure ()) (const empty) m
+
+skipInput :: Monad m => InputT c e s m c
+skipInput = do
+  m <- popInput
+  maybe empty pure m
+
+satisfyInput :: Monad m => (c -> Bool) -> InputT c e s m c
+satisfyInput p = do
+  m <- popInput
+  case m of
+    Just c | p c -> pure c
+    _ -> empty
+
+charInput :: (Monad m, Eq c) => c -> InputT c e s m c
+charInput = satisfyInput . (==)
+
 branchInput :: (Foldable f, Monad m) => f (InputT c e s m a) -> InputT c e s m a
 branchInput inputs = InputT (ReaderT (\stream -> branchParser (fmap (ParserT . flip runInputT stream) (toList inputs))))
 
+adaptInput :: (ParserT e s m a -> ParserT e s m b) -> InputT c e s m a -> InputT c e s m b
+adaptInput f input = InputT (ReaderT (f . ParserT . runInputT input))
+
 suppressInput :: Monad m => InputT c e s m a -> InputT c e s m a
-suppressInput input = InputT (ReaderT (suppressParser . ParserT . runInputT input))
+suppressInput = adaptInput suppressParser

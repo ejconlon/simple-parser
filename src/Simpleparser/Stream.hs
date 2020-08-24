@@ -1,10 +1,11 @@
 module SimpleParser.Stream
-  ( StreamT
+  ( StreamT (..)
   , Stream
-  , runStreamT
   , runStream
-  , ListStreamState
+  , ListStreamState (..)
   , StringStreamState
+  , newListStreamState
+  , newStringStreamState
   , listStream
   , stringStream
   ) where
@@ -21,17 +22,23 @@ runStream :: Stream s a -> s -> Maybe (a, s)
 runStream stream startState = runIdentity (runStreamT stream startState)
 
 data ListStreamState a = ListStreamState
-  { lssContents :: ![a]
-  , lssOffset :: !Int
-  } deriving (Functor, Foldable, Traversable)
+  { lssOffset :: !Int
+  , lssContents :: ![a]
+  } deriving (Eq, Show, Functor, Foldable, Traversable)
+
+newListStreamState :: [a] -> ListStreamState a
+newListStreamState = ListStreamState 0
 
 type StringStreamState = ListStreamState Char
 
+newStringStreamState :: String -> StringStreamState
+newStringStreamState = newListStreamState
+
 unStreamList :: ListStreamState a -> Identity (Maybe (a, ListStreamState a))
-unStreamList (ListStreamState as o) =
+unStreamList (ListStreamState o as) =
   case as of
     [] -> pure Nothing
-    b:bs -> pure (Just (b, ListStreamState bs (succ o)))
+    b:bs -> pure (Just (b, ListStreamState (succ o) bs))
 
 listStream :: Stream (ListStreamState a) a
 listStream = StreamT unStreamList

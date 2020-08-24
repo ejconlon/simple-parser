@@ -4,11 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6a242cc430000028f0a1ecedf31691759398ff52d15511682791ca72842dcbb5
+-- hash: e4d16b10db9961782e9cdcfd1d04b92aeb72a468957d88aa936a87243f549eca
 
 name:           simple-parser
 version:        0.1.0
+synopsis:       A simple parser combinator library
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
+category:       Parsers
 homepage:       https://github.com/ejconlon/simple-parser#readme
 bug-reports:    https://github.com/ejconlon/simple-parser/issues
 author:         Eric Conlon
@@ -39,19 +41,14 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds
   build-depends:
       base >=4.12 && <5
-    , containers >=0.6.2.1 && <1
-    , exceptions >=0.10.4 && <1
     , list-t >=1.0.4 && <2
-    , microlens >=0.4.11.2 && <1
     , mtl >=2.2.2 && <3
-    , transformers >=0.5.6.2 && <1
   default-language: Haskell2010
 
 test-suite simple-parser-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
-      Test.SimpleParser.SimpleTest
       Paths_simple_parser
   hs-source-dirs:
       test
@@ -59,13 +56,10 @@ test-suite simple-parser-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.12 && <5
-    , containers >=0.6.2.1 && <1
-    , exceptions >=0.10.4 && <1
     , list-t >=1.0.4 && <2
-    , microlens >=0.4.11.2 && <1
     , mtl >=2.2.2 && <3
     , simple-parser
     , tasty
     , tasty-hunit
-    , transformers >=0.5.6.2 && <1
+    , tasty-th
   default-language: Haskell2010
