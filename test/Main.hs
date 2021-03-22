@@ -425,6 +425,44 @@ test_suppress_fail_both =
         ]
   in testParserTrees parser cases
 
+test_isolate_success :: [TestTree]
+test_isolate_success =
+  let state = OffsetStream 0 "hi"
+      parser = isolateParser (asum [pure 1, pure 2]) :: TestParser Int
+      cases =
+        [ ("non-empty", InputOutput "hi" [parseSuccessResult 1 state])
+        ]
+  in testParserTrees parser cases
+
+test_isolate_fail_first :: [TestTree]
+test_isolate_fail_first =
+  let err = Error "boo"
+      parser = isolateParser (asum [throwError err, pure 2]) :: TestParser Int
+      cases =
+        [ ("non-empty", InputOutput "hi" [parseSuccessResult 2 (OffsetStream 0 "hi")])
+        ]
+  in testParserTrees parser cases
+
+test_isolate_fail_second :: [TestTree]
+test_isolate_fail_second =
+  let err = Error "boo"
+      parser = isolateParser (asum [pure 1, throwError err]) :: TestParser Int
+      cases =
+        [ ("non-empty", InputOutput "hi" [parseSuccessResult 1 (OffsetStream 0 "hi")])
+        ]
+  in testParserTrees parser cases
+
+test_isolate_fail_both :: [TestTree]
+test_isolate_fail_both =
+  let state = OffsetStream 0 "hi"
+      err1 = Error "boo1"
+      err2 = Error "boo2"
+      parser = isolateParser (asum [throwError err1, throwError err2]) :: TestParser Int
+      cases =
+        [ ("non-empty", InputOutput "hi" [parseErrorResult err1 state, parseErrorResult err2 state])
+        ]
+  in testParserTrees parser cases
+
 test_silence_success :: [TestTree]
 test_silence_success =
   let state = OffsetStream 0 "hi"
@@ -459,6 +497,25 @@ test_silence_fail_both =
       parser = silenceParser (asum [throwError err1, throwError err2]) :: TestParser Int
       cases =
         [ ("non-empty", InputOutput "hi" [])
+        ]
+  in testParserTrees parser cases
+
+test_look_ahead_success :: [TestTree]
+test_look_ahead_success =
+  let parser = lookAheadParser anyToken
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("non-empty", InputOutput "hi" [parseSuccessResult 'h' (OffsetStream 0 "hi")])
+        ]
+  in testParserTrees parser cases
+
+test_look_ahead_failure :: [TestTree]
+test_look_ahead_failure =
+  let err = Error "boo"
+      parser = lookAheadParser (anyToken *> throwError err) :: TestParser Char
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("non-empty", InputOutput "hi" [parseErrorResult err (OffsetStream 0 "hi")])
         ]
   in testParserTrees parser cases
 

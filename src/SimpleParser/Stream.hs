@@ -1,5 +1,5 @@
 -- | This reworks 'Text.Megaparsec.Stream' to split interfaces.
--- See https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Stream.html
+-- See <https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Stream.html Text.Megaparsec.Stream>.
 module SimpleParser.Stream
   ( Chunked (..)
   , Stream (..)

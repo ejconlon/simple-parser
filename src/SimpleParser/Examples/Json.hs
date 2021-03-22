@@ -9,7 +9,6 @@ module SimpleParser.Examples.Json
 import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isSpace)
-import Data.Foldable (asum)
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser
@@ -104,7 +103,7 @@ nullParser :: JsonParser (JsonF a)
 nullParser = JsonNull <$ nullTok
 
 boolParser :: JsonParser (JsonF a)
-boolParser = branchParser [JsonBool True <$ trueTok, JsonBool False <$ falseTok]
+boolParser = isolateParser (branchParser [JsonBool True <$ trueTok, JsonBool False <$ falseTok])
 
 objectPairParser :: JsonParser a -> JsonParser (String, a)
 objectPairParser root = do
@@ -120,7 +119,7 @@ arrayParser :: JsonParser a -> JsonParser (JsonF a)
 arrayParser root = jsonBetween openBracket closeBracket (fmap JsonArray (jsonSepBy root comma))
 
 rootParser :: JsonParser a -> JsonParser (JsonF a)
-rootParser root = asum opts where
+rootParser root = isolateParser (branchParser opts) where
   pairParser = objectPairParser root
   opts =
     [ objectParser pairParser
