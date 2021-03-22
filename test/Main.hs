@@ -474,12 +474,36 @@ test_take_while =
         ]
   in testParserTrees parser cases
 
+test_take_while_1 :: [TestTree]
+test_take_while_1 =
+  let parser = takeTokensWhile1 (=='h') :: TestParser Text
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("non-match", InputOutput "i" [])
+        , ("match", InputOutput "hi" [parseSuccessResult "h" (OffsetStream 1 "i")])
+        , ("match 2", InputOutput "hhi" [parseSuccessResult "hh" (OffsetStream 2 "i")])
+        , ("match end", InputOutput "hh" [parseSuccessResult "hh" (OffsetStream 2 "")])
+        ]
+  in testParserTrees parser cases
+
 test_drop_while :: [TestTree]
 test_drop_while =
   let parser = dropTokensWhile (=='h') :: TestParser Int
       cases =
         [ ("empty", InputOutput "" [parseSuccessResult 0 (OffsetStream 0 "")])
         , ("non-match", InputOutput "i" [parseSuccessResult 0 (OffsetStream 0 "i")])
+        , ("match", InputOutput "hi" [parseSuccessResult 1 (OffsetStream 1 "i")])
+        , ("match 2", InputOutput "hhi" [parseSuccessResult 2 (OffsetStream 2 "i")])
+        , ("match end", InputOutput "hh" [parseSuccessResult 2 (OffsetStream 2 "")])
+        ]
+  in testParserTrees parser cases
+
+test_drop_while_1 :: [TestTree]
+test_drop_while_1 =
+  let parser = dropTokensWhile1 (=='h') :: TestParser Int
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("non-match", InputOutput "i" [])
         , ("match", InputOutput "hi" [parseSuccessResult 1 (OffsetStream 1 "i")])
         , ("match 2", InputOutput "hhi" [parseSuccessResult 2 (OffsetStream 2 "i")])
         , ("match end", InputOutput "hh" [parseSuccessResult 2 (OffsetStream 2 "")])

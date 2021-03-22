@@ -12,7 +12,9 @@ module SimpleParser.Input
   , satisfyToken
   , foldTokensWhile
   , takeTokensWhile
+  , takeTokensWhile1
   , dropTokensWhile
+  , dropTokensWhile1
   , matchToken
   , matchChunk
   ) where
@@ -22,7 +24,7 @@ import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Parser (ParserT)
-import SimpleParser.Stream (Chunked (chunkLength), Stream (..))
+import SimpleParser.Stream (Chunked (..), Stream (..))
 
 -- | Return the next token, if any, but don't consume it.
 peekToken :: (Stream s, Monad m) => ParserT e s m (Maybe (Token s))
@@ -91,10 +93,20 @@ foldTokensWhile f g = go where
 takeTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (Chunk s)
 takeTokensWhile = state . streamTakeWhile
 
+-- | Take tokens into a chunk while they satisfy the given predicate.
+-- Only succeeds if 1 or more tokens are taken, so it never returns an empty chunk.
+takeTokensWhile1 :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (Chunk s)
+takeTokensWhile1 pcate = takeTokensWhile pcate >>= \c -> if chunkEmpty c then empty else pure c
+
 -- | Drop tokens and return chunk size while they satisfy the given predicate.
 -- Always succeeds, even at end of stream. May return empty chunk size 0.
 dropTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m Int
 dropTokensWhile = state . streamDropWhile
+
+-- | Drop tokens and return chunk size while they satisfy the given predicate.
+-- Only succeeds if 1 or more tokens are dropped.
+dropTokensWhile1 :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m Int
+dropTokensWhile1 pcate = dropTokensWhile pcate >>= \s -> if s == 0 then empty else pure s
 
 -- | Match token with equality or terminate the parser at inequality or end of stream.
 matchToken :: (Stream s, Monad m, Eq (Token s)) => Token s -> ParserT e s m (Token s)
