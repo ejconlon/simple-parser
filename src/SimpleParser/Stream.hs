@@ -12,21 +12,28 @@ module SimpleParser.Stream
 import Data.Bifunctor (first, second)
 import Data.Foldable (toList)
 import Data.Kind (Type)
+import Data.List (uncons)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
 
--- TODO(ejconlon) Add instances for Strict BS, Lazy BS, and Lazy Text
-
+-- | 'Chunked' captures the basic relationship between tokens and chunks of them.
+-- Basically, these things behave like lists, sequences, text, etc.
 class Monoid chunk => Chunked chunk token | chunk -> token where
+  consChunk :: token -> chunk -> chunk
+  unconsChunk :: chunk -> Maybe (token, chunk)
   tokenToChunk :: token -> chunk
   tokensToChunk :: [token] -> chunk
   chunkToTokens :: chunk -> [token]
   chunkLength :: chunk -> Int
   chunkEmpty :: chunk -> Bool
 
+-- TODO(ejconlon) Add instances for Strict BS, Lazy BS, and Lazy Text
+
 instance Chunked [a] a where
+  consChunk = (:)
+  unconsChunk = uncons
   tokenToChunk a = [a]
   tokensToChunk = id
   chunkToTokens = id
@@ -34,6 +41,11 @@ instance Chunked [a] a where
   chunkEmpty = null
 
 instance Chunked (Seq a) a where
+  consChunk = (:<|)
+  unconsChunk s =
+    case s of
+      Empty -> Nothing
+      a :<| b -> Just (a, b)
   tokenToChunk = Seq.singleton
   tokensToChunk = Seq.fromList
   chunkToTokens = toList
@@ -41,14 +53,16 @@ instance Chunked (Seq a) a where
   chunkEmpty = Seq.null
 
 instance Chunked Text Char where
+  consChunk = T.cons
+  unconsChunk = T.uncons
   tokenToChunk = T.singleton
   tokensToChunk = T.pack
   chunkToTokens = T.unpack
   chunkLength = T.length
   chunkEmpty = T.null
 
--- TODO(ejconlon) Specialize drops
-
+-- | 'Stream' lets us peel off tokens and chunks for parsing
+-- with explicit state passing.
 class Chunked (Chunk s) (Token s) => Stream s where
   type family Chunk s :: Type
   type family Token s :: Type
@@ -62,6 +76,8 @@ class Chunked (Chunk s) (Token s) => Stream s where
 
   streamDropWhile :: (Token s -> Bool) -> s -> (Int, s)
   streamDropWhile = defaultStreamDropWhile
+
+-- TODO(ejconlon) Specialize drops
 
 defaultStreamDropN :: Stream s => Int -> s -> Maybe (Int, s)
 defaultStreamDropN n = fmap (first chunkLength) . streamTakeN n

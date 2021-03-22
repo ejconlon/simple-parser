@@ -28,6 +28,8 @@ import qualified ListT
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
+-- All MTL instances are for this transformer only. If, for example, your effect
+-- has its own 'MonadState' instance, you'll have to use 'lift get' instead of 'get'.
 newtype ParserT e s m a = ParserT { runParserT :: s -> ListT m (ParseResult e s a) }
   deriving (Functor)
 
@@ -151,7 +153,7 @@ defaultParser def parser = ParserT (\s -> ListT (go s (runParserT parser s))) wh
       Just _ -> pure m
 
 -- | A parser that yields 'Nothing' if there are no results (success or failure),
--- otherwise wrapping successing in 'Just'.
+-- otherwise wrapping successes in 'Just'.
 optionalParser :: Monad m => ParserT e s m a -> ParserT e s m (Maybe a)
 optionalParser parser = defaultParser Nothing (fmap Just parser)
 
