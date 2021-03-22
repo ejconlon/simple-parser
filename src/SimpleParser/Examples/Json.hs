@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
@@ -8,6 +10,7 @@ import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isSpace)
 import Data.Foldable (asum)
+import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser
 
@@ -22,34 +25,34 @@ data JsonF a =
 
 newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
 
-type JsonInput a = Input Char Void StringStreamState a
+type JsonParser a = Parser Void Text a
 
-parseJson :: String -> [Json]
+parseJson :: Text -> [Json]
 parseJson str = do
-  ParseResult v _ <- runInput jsonInput stringStream (newStringStreamState str)
+  ParseResult v _ <- runParser jsonParser str
   case v of
     ParseSuccess a -> pure a
 
-jsonSpace :: JsonInput ()
-jsonSpace = greedyStarInput_ (void (satisfyInput isSpace))
+jsonSpace :: JsonParser ()
+jsonSpace = greedyStarParser_ (void (satisfyToken isSpace))
 
-jsonLexeme :: JsonInput () -> JsonInput a -> JsonInput a
+jsonLexeme :: JsonParser () -> JsonParser a -> JsonParser a
 jsonLexeme spaceAfter thing = do
   a <- thing
   spaceAfter
   pure a
 
-jsonBetween :: JsonInput () -> JsonInput () -> JsonInput a -> JsonInput a
+jsonBetween :: JsonParser () -> JsonParser () -> JsonParser a -> JsonParser a
 jsonBetween start end thing = do
   start
   a <- thing
   end
   pure a
 
-jsonSepBy :: JsonInput a -> JsonInput () -> JsonInput [a]
+jsonSepBy :: JsonParser a -> JsonParser () -> JsonParser [a]
 jsonSepBy thing sep = go [] where
-  optThing = optionalInput thing
-  optSep = optionalInput sep
+  optThing = optionalParser thing
+  optSep = optionalParser sep
   go !acc = do
     ma <- optThing
     case ma of
@@ -61,13 +64,13 @@ jsonSepBy thing sep = go [] where
           Nothing -> pure (reverse newAcc)
           Just () -> go newAcc
 
-jsonCharLexeme :: Char -> JsonInput ()
-jsonCharLexeme c = void (jsonLexeme jsonSpace (charInput c))
+jsonCharLexeme :: Char -> JsonParser ()
+jsonCharLexeme c = void (jsonLexeme jsonSpace (matchToken c))
 
-jsonWordLexeme :: String -> JsonInput ()
-jsonWordLexeme cs = void (jsonLexeme jsonSpace (wordInput_ cs))
+jsonWordLexeme :: Text -> JsonParser ()
+jsonWordLexeme cs = void (jsonLexeme jsonSpace (matchChunk cs))
 
-openBrace, closeBrace, comma, colon, openBracket, closeBracket, closeQuote :: JsonInput ()
+openBrace, closeBrace, comma, colon, openBracket, closeBracket, closeQuote :: JsonParser ()
 openBrace = jsonCharLexeme '{'
 closeBrace = jsonCharLexeme '}'
 comma = jsonCharLexeme ','
@@ -76,56 +79,56 @@ openBracket = jsonCharLexeme '['
 closeBracket = jsonCharLexeme ']'
 closeQuote = jsonCharLexeme '"'
 
-openQuote :: JsonInput ()
-openQuote = void (charInput '"')
+openQuote :: JsonParser ()
+openQuote = void (matchToken '"')
 
-nullTok, trueTok, falseTok :: JsonInput ()
+nullTok, trueTok, falseTok :: JsonParser ()
 nullTok = jsonWordLexeme "null"
 trueTok = jsonWordLexeme "true"
 falseTok = jsonWordLexeme "false"
 
-nonQuoteChar :: JsonInput Char
-nonQuoteChar = satisfyInput (/= '"')
+nonQuoteChar :: JsonParser Char
+nonQuoteChar = satisfyToken (/= '"')
 
-nonQuoteString :: JsonInput String
-nonQuoteString = greedyStarInput nonQuoteChar
+nonQuoteString :: JsonParser String
+nonQuoteString = greedyStarParser nonQuoteChar
 
-rawStringInput :: JsonInput String
-rawStringInput = jsonBetween openQuote closeQuote nonQuoteString
+rawStringParser :: JsonParser String
+rawStringParser = jsonBetween openQuote closeQuote nonQuoteString
 
--- NOTE: Does not handle escape codes. Use `foldWhileInput` for that...
-stringInput :: JsonInput (JsonF a)
-stringInput = fmap JsonString rawStringInput
+-- NOTE: Does not handle escape codes. Use `foldTokensWhile` for that...
+stringParser :: JsonParser (JsonF a)
+stringParser = fmap JsonString rawStringParser
 
-nullInput :: JsonInput (JsonF a)
-nullInput = JsonNull <$ nullTok
+nullParser :: JsonParser (JsonF a)
+nullParser = JsonNull <$ nullTok
 
-boolInput :: JsonInput (JsonF a)
-boolInput = branchInput [JsonBool True <$ trueTok, JsonBool False <$ falseTok]
+boolParser :: JsonParser (JsonF a)
+boolParser = branchParser [JsonBool True <$ trueTok, JsonBool False <$ falseTok]
 
-objectPairInput :: JsonInput a -> JsonInput (String, a)
-objectPairInput root = do
-  name <- rawStringInput
+objectPairParser :: JsonParser a -> JsonParser (String, a)
+objectPairParser root = do
+  name <- rawStringParser
   colon
   value <- root
   pure (name, value)
 
-objectInput :: JsonInput (String, a) -> JsonInput (JsonF a)
-objectInput pairInput = jsonBetween openBrace closeBrace (fmap JsonObject (jsonSepBy pairInput comma))
+objectParser :: JsonParser (String, a) -> JsonParser (JsonF a)
+objectParser pairParser = jsonBetween openBrace closeBrace (fmap JsonObject (jsonSepBy pairParser comma))
 
-arrayInput :: JsonInput a -> JsonInput (JsonF a)
-arrayInput root = jsonBetween openBracket closeBracket (fmap JsonArray (jsonSepBy root comma))
+arrayParser :: JsonParser a -> JsonParser (JsonF a)
+arrayParser root = jsonBetween openBracket closeBracket (fmap JsonArray (jsonSepBy root comma))
 
-rootInput :: JsonInput a -> JsonInput (JsonF a)
-rootInput root = asum opts where
-  pairInput = objectPairInput root
+rootParser :: JsonParser a -> JsonParser (JsonF a)
+rootParser root = asum opts where
+  pairParser = objectPairParser root
   opts =
-    [ objectInput pairInput
-    , arrayInput root
-    , stringInput
-    , boolInput
-    , nullInput
+    [ objectParser pairParser
+    , arrayParser root
+    , stringParser
+    , boolParser
+    , nullParser
     ]
 
-jsonInput :: JsonInput Json
-jsonInput = let p = fmap Json (rootInput p) in p
+jsonParser :: JsonParser Json
+jsonParser = let p = fmap Json (rootParser p) in p

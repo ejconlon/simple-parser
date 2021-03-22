@@ -6,6 +6,7 @@ module SimpleParser.Result
   , parseValue
   ) where
 
+-- | Strict 'Either' for parse results.
 data ParseValue e a =
     ParseError !e
   | ParseSuccess !a
@@ -17,6 +18,7 @@ parseValue onError onSuccess value =
     ParseError e -> onError e
     ParseSuccess a -> onSuccess a
 
+-- | Strict pair of parse result and state at the time it was yielded.
 data ParseResult e s a = ParseResult
   { prValue :: !(ParseValue e a)
   , prState :: !s

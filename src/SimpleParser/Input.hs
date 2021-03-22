@@ -1,180 +1,81 @@
 module SimpleParser.Input
-  ( InputT (..)
-  , Input
-  , runInputT
-  , runInput
-  , parseInput
-  , peekInput
-  , popInput
-  , isEndInput
-  , endInput
-  , skipInput
-  , satisfyInput
-  , foldInputWhile
-  , takeInputWhile
-  , dropInputWhile
-  , charInput
-  , wordInput
-  , wordInput_
-  , adaptInput
-  , filterInput
-  , reflectInput
-  , branchInput
-  , suppressInput
-  , defaultInput
-  , optionalInput
-  , silenceInput
-  , greedyStarInput
-  , greedyStarInput_
-  , greedyPlusInput
-  , greedyPlusInput_
+  ( peekToken
+  , popToken
+  , peekChunk
+  , popChunk
+  , isEnd
+  , matchEnd
+  , anyToken
+  , anyChunk
+  , satisfyToken
+  , foldTokensWhile
+  , takeTokensWhile
+  , dropTokensWhile
+  , matchToken
+  , matchChunk
   ) where
 
-import Control.Applicative (Alternative (..))
-import Control.Monad (MonadPlus)
-import Control.Monad.Except (MonadError)
-import Control.Monad.Identity (Identity (..))
-import Control.Monad.Reader (MonadReader, ReaderT (..), runReaderT)
-import Control.Monad.State (MonadState)
-import Control.Monad.Trans (MonadTrans (..))
+import Control.Applicative (empty)
+import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
-import Data.Foldable (toList)
 import Data.Maybe (isNothing)
-import ListT (ListT (..))
-import qualified ListT
-import SimpleParser.Parser (ParserT (..), branchParser, defaultParser, filterParser, greedyPlusParser,
-                            greedyPlusParser_, greedyStarParser, greedyStarParser_, optionalParser, reflectParser,
-                            silenceParser, suppressParser)
-import SimpleParser.Result (ParseResult (..), ParseValue (..))
-import SimpleParser.Stream (Stream, StreamT, runStreamT)
+import SimpleParser.Parser (ParserT)
+import SimpleParser.Stream (Chunked (chunkLength), Stream (..))
 
-newtype InputT c e s m a = InputT
-  { unInputT :: ReaderT (StreamT s m c) (ParserT e s m) a
-  } deriving (Functor, Applicative, Monad, Alternative, MonadPlus,
-      MonadError e, MonadState s, MonadReader (StreamT s m c))
+peekToken :: (Stream s, Monad m) => ParserT e s m (Maybe (Token s))
+peekToken = gets (fmap fst . streamTake1)
 
-type Input c e s a = InputT c e s Identity a
+popToken :: (Stream s, Monad m) => ParserT e s m (Maybe (Token s))
+popToken = state (\stream -> maybe (Nothing, stream) (first Just) (streamTake1 stream))
 
-instance MonadTrans (InputT c e s) where
-  lift = InputT . lift . lift
+peekChunk :: (Stream s, Monad m) => Int -> ParserT e s m (Maybe (Chunk s))
+peekChunk n = gets (fmap fst . streamTakeN n)
 
-runInputT :: InputT c e s m a -> StreamT s m c -> s -> ListT m (ParseResult e s a)
-runInputT input stream = runParserT (runReaderT (unInputT input) stream)
+popChunk :: (Stream s, Monad m) => Int -> ParserT e s m (Maybe (Chunk s))
+popChunk n = state (\stream -> maybe (Nothing, stream) (first Just) (streamTakeN n stream))
 
-runInput :: Input c e s a -> Stream s c -> s -> [ParseResult e s a]
-runInput input stream startState = runIdentity (ListT.toList (runInputT input stream startState))
+dropChunk :: (Stream s, Monad m) => Int -> ParserT e s m (Maybe Int)
+dropChunk n = state (\stream -> maybe (Nothing, stream) (first Just) (streamDropN n stream))
 
-parseInput :: Monad m => ParserT e s m a -> InputT c e s m a
-parseInput = InputT . lift
+isEnd :: (Stream s, Monad m) => ParserT e s m Bool
+isEnd = isNothing <$> peekToken
 
-peekInput :: Monad m => InputT c e s m (Maybe c)
-peekInput = InputT $ ReaderT $ \stream ->
-  ParserT $ \s -> ListT $ do
-    m <- runStreamT stream s
-    pure (Just (ParseResult (ParseSuccess (fmap fst m)) s, empty))
+matchEnd :: (Stream s, Monad m) => ParserT e s m ()
+matchEnd = peekToken >>= maybe (pure ()) (const empty)
 
-popInput :: Monad m => InputT c e s m (Maybe c)
-popInput = InputT $ ReaderT $ \stream ->
-  ParserT $ \s -> ListT $ do
-    m <- runStreamT stream s
-    let (v, t) = maybe (Nothing, s) (first Just) m
-    pure (Just (ParseResult (ParseSuccess v) t, empty))
+anyToken :: (Stream s, Monad m) => ParserT e s m (Token s)
+anyToken = popToken >>= maybe empty pure
 
-isEndInput :: Monad m => InputT c e s m Bool
-isEndInput = isNothing <$> peekInput
+anyChunk :: (Stream s, Monad m) => Int -> ParserT e s m (Chunk s)
+anyChunk n = popChunk n >>= maybe empty pure
 
-endInput :: Monad m => InputT c e s m ()
-endInput = do
-  m <- peekInput
-  maybe (pure ()) (const empty) m
-
-skipInput :: Monad m => InputT c e s m c
-skipInput = do
-  m <- popInput
-  maybe empty pure m
-
-satisfyInput :: Monad m => (c -> Bool) -> InputT c e s m c
-satisfyInput p = do
-  m <- popInput
+satisfyToken :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (Token s)
+satisfyToken p = do
+  m <- popToken
   case m of
     Just c | p c -> pure c
     _ -> empty
 
-foldInputWhile :: Monad m => (c -> x -> (Bool, x)) -> (x -> x) -> x -> InputT c e s m x
-foldInputWhile f g = go where
+foldTokensWhile :: (Stream s, Monad m) => (Token s -> x -> (Bool, x)) -> (x -> x) -> x -> ParserT e s m x
+foldTokensWhile f g = go where
   go !x = do
-    m <- peekInput
+    m <- peekToken
     case m of
       Nothing -> pure (g x)
       Just c ->
         let (ok, newX) = f c x
         in if ok
-          then popInput *> go newX
+          then popToken *> go newX
           else pure x
 
-takeInputWhile :: Monad m => (c -> Bool) -> InputT c e s m [c]
-takeInputWhile pcate = fmap reverse (foldInputWhile append id []) where
-  append x xs = if pcate x then (True, x:xs) else (False, xs)
+takeTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (Chunk s)
+takeTokensWhile = state . streamTakeWhile
 
-dropInputWhile :: Monad m => (c -> Bool) -> InputT c e s m ()
-dropInputWhile pcate = go where
-  go = do
-    m <- peekInput
-    case m of
-      Just c | pcate c -> popInput *> go
-      _ -> pure ()
+dropTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m Int
+dropTokensWhile = state . streamDropWhile
 
-charInput :: (Monad m, Eq c) => c -> InputT c e s m c
-charInput = satisfyInput . (==)
+matchToken :: (Stream s, Monad m, Eq (Token s)) => Token s -> ParserT e s m (Token s)
+matchToken = satisfyToken . (==)
 
-wordInput :: (Monad m, Eq c, Foldable f) => f c -> InputT c e s m [c]
-wordInput = go [] . toList where
-  go !acc cs =
-    case cs of
-      [] -> pure (reverse acc)
-      (c:cs') -> do
-        c' <- charInput c
-        go (c':acc) cs'
-
-wordInput_ :: (Monad m, Eq c, Foldable f) => f c -> InputT c e s m ()
-wordInput_ = go . toList where
-  go cs =
-    case cs of
-      [] -> pure ()
-      (c:cs') -> charInput c >> go cs'
-
-adaptInput :: (ParserT e s m a -> ParserT e s m b) -> InputT c e s m a -> InputT c e s m b
-adaptInput f input = InputT (ReaderT (f . ParserT . runInputT input))
-
-filterInput :: Monad m => (a -> Bool) -> InputT c e s m a -> InputT c e s m a
-filterInput = adaptInput . filterParser
-
-reflectInput :: Monad m => InputT c e s m a -> InputT c e s m (ParseValue e a)
-reflectInput = adaptInput reflectParser
-
-branchInput :: (Foldable f, Monad m) => f (InputT c e s m a) -> InputT c e s m a
-branchInput inputs = InputT (ReaderT (\stream -> branchParser (fmap (ParserT . flip runInputT stream) (toList inputs))))
-
-suppressInput :: Monad m => InputT c e s m a -> InputT c e s m a
-suppressInput = adaptInput suppressParser
-
-defaultInput :: Monad m => a -> InputT c e s m a -> InputT c e s m a
-defaultInput = adaptInput . defaultParser
-
-optionalInput :: Monad m => InputT c e s m a -> InputT c e s m (Maybe a)
-optionalInput = adaptInput optionalParser
-
-silenceInput :: Monad m => InputT c e s m a -> InputT c e s m a
-silenceInput = adaptInput silenceParser
-
-greedyStarInput :: Monad m => InputT c e s m a -> InputT c e s m [a]
-greedyStarInput = adaptInput greedyStarParser
-
-greedyStarInput_ :: Monad m => InputT c e s m a -> InputT c e s m ()
-greedyStarInput_ = adaptInput greedyStarParser_
-
-greedyPlusInput :: Monad m => InputT c e s m a -> InputT c e s m [a]
-greedyPlusInput = adaptInput greedyPlusParser
-
-greedyPlusInput_ :: Monad m => InputT c e s m a -> InputT c e s m ()
-greedyPlusInput_ = adaptInput greedyPlusParser_
+matchChunk :: (Stream s, Monad m, Eq (Chunk s)) => Chunk s -> ParserT e s m (Chunk s)
+matchChunk k = popChunk (chunkLength k) >>= maybe empty (\j -> if k == j then pure j else empty)
