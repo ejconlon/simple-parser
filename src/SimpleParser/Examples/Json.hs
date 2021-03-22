@@ -29,7 +29,7 @@ type JsonParser a = Parser Void Text a
 
 parseJson :: Text -> [Json]
 parseJson str = do
-  ParseResult v _ <- runParser jsonParser str
+  ParseResult v _ <- runParser (jsonParser <* matchEnd) str
   case v of
     ParseSuccess a -> pure a
 
@@ -96,7 +96,7 @@ nonQuoteString = greedyStarParser nonQuoteChar
 rawStringParser :: JsonParser String
 rawStringParser = jsonBetween openQuote closeQuote nonQuoteString
 
--- NOTE: Does not handle escape codes. Use `foldTokensWhile` for that...
+-- TODO(ejconlon) This does not handle escape codes. Use `foldTokensWhile` for that...
 stringParser :: JsonParser (JsonF a)
 stringParser = fmap JsonString rawStringParser
 

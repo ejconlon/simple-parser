@@ -3,6 +3,8 @@
 module SimpleParser.Stream
   ( Chunked (..)
   , Stream (..)
+  , defaultStreamDropN
+  , defaultStreamDropWhile
   , OffsetStream (..)
   , newOffsetStream
   ) where
@@ -17,7 +19,7 @@ import qualified Data.Text as T
 
 -- TODO(ejconlon) Add instances for Strict BS, Lazy BS, and Lazy Text
 
-class Chunked chunk token | chunk -> token where
+class Monoid chunk => Chunked chunk token | chunk -> token where
   tokenToChunk :: token -> chunk
   tokensToChunk :: [token] -> chunk
   chunkToTokens :: chunk -> [token]
@@ -56,10 +58,16 @@ class Chunked (Chunk s) (Token s) => Stream s where
   streamTakeWhile :: (Token s -> Bool) -> s -> (Chunk s, s)
 
   streamDropN :: Int -> s -> Maybe (Int, s)
-  streamDropN n = fmap (first chunkLength) . streamTakeN n
+  streamDropN = defaultStreamDropN
 
   streamDropWhile :: (Token s -> Bool) -> s -> (Int, s)
-  streamDropWhile pcate = first chunkLength . streamTakeWhile pcate
+  streamDropWhile = defaultStreamDropWhile
+
+defaultStreamDropN :: Stream s => Int -> s -> Maybe (Int, s)
+defaultStreamDropN n = fmap (first chunkLength) . streamTakeN n
+
+defaultStreamDropWhile :: Stream s => (Token s -> Bool) -> s -> (Int, s)
+defaultStreamDropWhile pcate = first chunkLength . streamTakeWhile pcate
 
 instance Stream [a] where
   type instance Chunk [a] = [a]

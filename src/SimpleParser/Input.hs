@@ -3,6 +3,7 @@ module SimpleParser.Input
   , popToken
   , peekChunk
   , popChunk
+  , dropChunk
   , isEnd
   , matchEnd
   , anyToken

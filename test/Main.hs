@@ -16,7 +16,6 @@ import Test.Tasty.TH (defaultMainGenerator)
 
 newtype Error = Error { unError :: String } deriving (Eq, Show)
 
--- TODO Rename to TestInput once all test cases are migrated
 type TestParser a = Parser Error (OffsetStream Text) a
 
 type TestResult a = ParseResult Error (OffsetStream Text) a
@@ -52,8 +51,8 @@ test_pure =
         ]
   in testParserTrees parser cases
 
-test_peek :: [TestTree]
-test_peek =
+test_peek_token :: [TestTree]
+test_peek_token =
   let parser = peekToken
       cases =
         [ ("empty", InputOutput "" [parseSuccessResult Nothing (OffsetStream 0 "")])
@@ -61,8 +60,8 @@ test_peek =
         ]
   in testParserTrees parser cases
 
-test_pop :: [TestTree]
-test_pop =
+test_pop_token :: [TestTree]
+test_pop_token =
   let parser = popToken
       cases =
         [ ("empty", InputOutput "" [parseSuccessResult Nothing (OffsetStream 0 "")])
@@ -70,8 +69,50 @@ test_pop =
         ]
   in testParserTrees parser cases
 
-test_end :: [TestTree]
-test_end =
+test_peek_chunk :: [TestTree]
+test_peek_chunk =
+  let parser = peekChunk 2
+      cases =
+        [ ("len 0", InputOutput "" [parseSuccessResult Nothing (OffsetStream 0 "")])
+        , ("len 1", InputOutput "h" [parseSuccessResult (Just "h") (OffsetStream 0 "h")])
+        , ("len 2", InputOutput "hi" [parseSuccessResult (Just "hi") (OffsetStream 0 "hi")])
+        , ("len 3", InputOutput "hii" [parseSuccessResult (Just "hi") (OffsetStream 0 "hii")])
+        ]
+  in testParserTrees parser cases
+
+test_pop_chunk :: [TestTree]
+test_pop_chunk =
+  let parser = popChunk 2
+      cases =
+        [ ("len 0", InputOutput "" [parseSuccessResult Nothing (OffsetStream 0 "")])
+        , ("len 1", InputOutput "h" [parseSuccessResult (Just "h") (OffsetStream 1 "")])
+        , ("len 2", InputOutput "hi" [parseSuccessResult (Just "hi") (OffsetStream 2 "")])
+        , ("len 3", InputOutput "hii" [parseSuccessResult (Just "hi") (OffsetStream 2 "i")])
+        ]
+  in testParserTrees parser cases
+
+test_drop_chunk :: [TestTree]
+test_drop_chunk =
+  let parser = dropChunk 2
+      cases =
+        [ ("len 0", InputOutput "" [parseSuccessResult Nothing (OffsetStream 0 "")])
+        , ("len 1", InputOutput "h" [parseSuccessResult (Just 1) (OffsetStream 1 "")])
+        , ("len 2", InputOutput "hi" [parseSuccessResult (Just 2) (OffsetStream 2 "")])
+        , ("len 3", InputOutput "hii" [parseSuccessResult (Just 2) (OffsetStream 2 "i")])
+        ]
+  in testParserTrees parser cases
+
+test_is_end :: [TestTree]
+test_is_end =
+  let parser = isEnd
+      cases =
+        [ ("empty", InputOutput "" [parseSuccessResult True (OffsetStream 0 "")])
+        , ("non-empty", InputOutput "hi" [parseSuccessResult False (OffsetStream 0 "hi")])
+        ]
+  in testParserTrees parser cases
+
+test_match_end :: [TestTree]
+test_match_end =
   let parser = matchEnd
       cases =
         [ ("empty", InputOutput "" [parseSuccessResult () (OffsetStream 0 "")])
@@ -79,8 +120,8 @@ test_end =
         ]
   in testParserTrees parser cases
 
-test_skip :: [TestTree]
-test_skip =
+test_any_token :: [TestTree]
+test_any_token =
   let parser = anyToken
       cases =
         [ ("empty", InputOutput "" [])
@@ -88,8 +129,19 @@ test_skip =
         ]
   in testParserTrees parser cases
 
-test_char :: [TestTree]
-test_char =
+test_any_chunk :: [TestTree]
+test_any_chunk =
+  let parser = anyChunk 2 :: TestParser Text
+      cases =
+        [ ("len 0", InputOutput "" [])
+        , ("len 1", InputOutput "h" [parseSuccessResult "h" (OffsetStream 1 "")])
+        , ("len 2", InputOutput "hi" [parseSuccessResult "hi" (OffsetStream 2 "")])
+        , ("len 3", InputOutput "hii" [parseSuccessResult "hi" (OffsetStream 2 "i")])
+        ]
+  in testParserTrees parser cases
+
+test_match_token :: [TestTree]
+test_match_token =
   let parser = matchToken 'h'
       cases =
         [ ("empty", InputOutput "" [])
@@ -98,8 +150,8 @@ test_char =
         ]
   in testParserTrees parser cases
 
-test_word :: [TestTree]
-test_word =
+test_match_chunk :: [TestTree]
+test_match_chunk =
   let parser = matchChunk "hi"
       cases =
         [ ("empty", InputOutput "" [])
@@ -465,6 +517,8 @@ test_json =
         , ("str1", "\"x\"", [strVal "x"])
         , ("str2", "\"xy\"", [strVal "xy"])
         , ("str3", "\"xyz\"", [strVal "xyz"])
+        -- TODO(ejconlon) Refine parser to make this pass
+        -- , ("str4", "\"xy\\\"z\"", [strVal "xy\"z"])
         , ("obj0", "{}", [objVal []])
         , ("obj1", "{\"x\": true}", [objVal [("x", trueVal)]])
         , ("obj2", "{\"x\": true, \"y\": false}", [objVal [("x", trueVal), ("y", falseVal)]])
