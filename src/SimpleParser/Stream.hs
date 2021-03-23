@@ -40,8 +40,10 @@ class Monoid chunk => Chunked chunk token | chunk -> token where
   revTokensToChunk :: [token] -> chunk
   revTokensToChunk = tokensToChunk . reverse
 
+-- | Captures textual streams.
 class Chunked chunk Char => TextualChunked chunk where
   packChunk :: chunk -> Text
+  unpackChunk :: Text -> chunk
 
 -- TODO(ejconlon) Add instances for Strict BS, Lazy BS, and Lazy Text
 
@@ -56,6 +58,7 @@ instance Chunked [a] a where
 
 instance (a ~ Char) => TextualChunked [a] where
   packChunk = T.pack
+  unpackChunk = T.unpack
 
 instance Chunked (Seq a) a where
   consChunk = (:<|)
@@ -72,6 +75,7 @@ instance Chunked (Seq a) a where
 
 instance (a ~ Char) => TextualChunked (Seq a) where
   packChunk = T.pack . toList
+  unpackChunk = Seq.fromList . T.unpack
 
 instance Chunked Text Char where
   consChunk = T.cons
@@ -84,6 +88,7 @@ instance Chunked Text Char where
 
 instance TextualChunked Text where
   packChunk = id
+  unpackChunk = id
 
 -- | 'Stream' lets us peel off tokens and chunks for parsing
 -- with explicit state passing.

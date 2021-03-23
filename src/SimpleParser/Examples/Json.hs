@@ -3,7 +3,7 @@
 module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
-  , parseJson
+  , JsonParser
   , rootJsonParser
   , jsonParser
   ) where
@@ -11,10 +11,12 @@ module SimpleParser.Examples.Json
 import Control.Monad (void)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
-import Data.Void (Void)
-import SimpleParser
+import SimpleParser.Common (betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
+                            spaceParser)
+import SimpleParser.Input (matchChunk, matchToken)
+import SimpleParser.Parser (ParserT, branchParser, isolateParser)
+import SimpleParser.Stream (Stream (..), TextualChunked (..), TextualStream)
 
--- JSON without numbers...
 data JsonF a =
     JsonObject ![(Text, a)]
   | JsonArray ![a]
@@ -26,79 +28,73 @@ data JsonF a =
 
 newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
 
-type JsonParser a = Parser Void Text a
+type JsonParser s m = (TextualStream s, Eq (Chunk s), Monad m)
 
-parseJson :: Text -> [Json]
-parseJson str = do
-  ParseResult v _ <- runParser (jsonParser <* matchEnd) str
-  case v of
-    ParseSuccess a -> pure a
+jsonParser :: JsonParser s m => ParserT e s m Json
+jsonParser = let p = fmap Json (rootJsonParser p) in p
 
-jsonTokenLexeme :: Char -> JsonParser ()
-jsonTokenLexeme c = void (lexemeParser spaceParser (matchToken c))
+rootJsonParser :: JsonParser s m => ParserT e s m a -> ParserT e s m (JsonF a)
+rootJsonParser root = isolateParser (branchParser opts) where
+  pairP = objectPairP root
+  opts =
+    [ objectP pairP
+    , arrayP root
+    , stringP
+    , numP
+    , boolP
+    , nullP
+    ]
 
-jsonChunkLexeme :: Text -> JsonParser ()
-jsonChunkLexeme cs = void (lexemeParser spaceParser (matchChunk cs))
+spaceP :: JsonParser s m => ParserT e s m ()
+spaceP = spaceParser
 
-openBrace, closeBrace, comma, colon, openBracket, closeBracket, closeQuote :: JsonParser ()
-openBrace = jsonTokenLexeme '{'
-closeBrace = jsonTokenLexeme '}'
-comma = jsonTokenLexeme ','
-colon = jsonTokenLexeme ':'
-openBracket = jsonTokenLexeme '['
-closeBracket = jsonTokenLexeme ']'
-closeQuote = jsonTokenLexeme '"'
+tokL :: JsonParser s m => Char -> ParserT e s m ()
+tokL c = lexemeParser spaceP (void (matchToken c))
 
-openQuote :: JsonParser ()
-openQuote = void (matchToken '"')
+chunkL :: JsonParser s m => Text -> ParserT e s m ()
+chunkL cs = lexemeParser spaceP (void (matchChunk (unpackChunk cs)))
 
-nullTok, trueTok, falseTok :: JsonParser ()
-nullTok = jsonChunkLexeme "null"
-trueTok = jsonChunkLexeme "true"
-falseTok = jsonChunkLexeme "false"
+openBraceP, closeBraceP, commaP, colonP, openBracketP, closeBracketP, closeQuoteP :: JsonParser s m => ParserT e s m ()
+openBraceP = tokL '{'
+closeBraceP = tokL '}'
+commaP = tokL ','
+colonP = tokL ':'
+openBracketP = tokL '['
+closeBracketP = tokL ']'
+closeQuoteP = tokL '"'
 
-nonQuoteString :: JsonParser Text
-nonQuoteString = takeTokensWhile (/= '"')
+openQuoteP :: JsonParser s m => ParserT e s m ()
+openQuoteP = void (matchToken '"')
 
-rawStringParser :: JsonParser Text
-rawStringParser = escapedStringParser '"'
+nullTokP, trueTokP, falseTokP :: JsonParser s m => ParserT e s m ()
+nullTokP = chunkL "null"
+trueTokP = chunkL "true"
+falseTokP = chunkL "false"
 
-stringParser :: JsonParser (JsonF a)
-stringParser = fmap JsonString rawStringParser
+rawStringP :: JsonParser s m => ParserT e s m Text
+rawStringP = fmap packChunk (escapedStringParser '"')
 
-nullParser :: JsonParser (JsonF a)
-nullParser = JsonNull <$ nullTok
+stringP:: JsonParser s m => ParserT e s m (JsonF a)
+stringP= fmap JsonString rawStringP
 
-boolParser :: JsonParser (JsonF a)
-boolParser = isolateParser (branchParser [JsonBool True <$ trueTok, JsonBool False <$ falseTok])
+nullP:: JsonParser s m => ParserT e s m (JsonF a)
+nullP = JsonNull <$ nullTokP
 
-numParser :: JsonParser (JsonF a)
-numParser = fmap JsonNum scientificParser
+boolP:: JsonParser s m => ParserT e s m (JsonF a)
+boolP= isolateParser (branchParser [JsonBool True <$ trueTokP, JsonBool False <$ falseTokP])
 
-objectPairParser :: JsonParser a -> JsonParser (Text, a)
-objectPairParser root = do
-  name <- rawStringParser
-  colon
+numP:: JsonParser s m => ParserT e s m (JsonF a)
+numP= fmap JsonNum scientificParser
+
+objectPairP :: JsonParser s m => ParserT e s m a -> ParserT e s m (Text, a)
+objectPairP root = do
+  name <- rawStringP
+  colonP
   value <- root
   pure (name, value)
 
-objectParser :: JsonParser (Text, a) -> JsonParser (JsonF a)
-objectParser pairParser = betweenParser openBrace closeBrace (fmap JsonObject (sepByParser pairParser comma))
+objectP :: JsonParser s m => ParserT e s m (Text, a) -> ParserT e s m (JsonF a)
+objectP pairP = betweenParser openBraceP closeBraceP (fmap JsonObject (sepByParser pairP commaP))
 
-arrayParser :: JsonParser a -> JsonParser (JsonF a)
-arrayParser root = betweenParser openBracket closeBracket (fmap JsonArray (sepByParser root comma))
-
-rootJsonParser :: JsonParser a -> JsonParser (JsonF a)
-rootJsonParser root = isolateParser (branchParser opts) where
-  pairParser = objectPairParser root
-  opts =
-    [ objectParser pairParser
-    , arrayParser root
-    , stringParser
-    , numParser
-    , boolParser
-    , nullParser
-    ]
-
-jsonParser :: JsonParser Json
-jsonParser = let p = fmap Json (rootJsonParser p) in p
+arrayP:: JsonParser s m => ParserT e s m a -> ParserT e s m (JsonF a)
+arrayP root = betweenParser openBracketP closeBracketP (fmap JsonArray (sepByParser root commaP))

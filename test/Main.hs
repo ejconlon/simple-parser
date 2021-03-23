@@ -8,8 +8,9 @@ import Control.Monad.Except (catchError, throwError)
 import Data.Foldable (asum)
 import Data.Functor (($>))
 import Data.Text (Text)
+import Data.Void (Void)
 import SimpleParser
-import SimpleParser.Examples.Json (Json (..), JsonF (..), parseJson)
+import SimpleParser.Examples.Json (Json (..), JsonF (..), jsonParser)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -574,6 +575,13 @@ testJsonCase name str expected = testCase ("json " <> name) $ do
 
 testJsonTrees :: [(TestName, Text, [Json])] -> [TestTree]
 testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
+
+parseJson :: Text -> [Json]
+parseJson str = do
+  let p = jsonParser <* matchEnd :: Parser Void Text Json
+  ParseResult v _ <- runParser p str
+  case v of
+    ParseSuccess a -> pure a
 
 test_json :: [TestTree]
 test_json =
