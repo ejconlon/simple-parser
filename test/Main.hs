@@ -583,6 +583,7 @@ test_json =
       arrVal = Json . JsonArray
       strVal = Json . JsonString
       objVal = Json . JsonObject
+      numVal = Json . JsonNum
       cases =
         [ ("empty", "", [])
         , ("bad", "bad", [])
@@ -602,6 +603,11 @@ test_json =
         , ("obj0", "{}", [objVal []])
         , ("obj1", "{\"x\": true}", [objVal [("x", trueVal)]])
         , ("obj2", "{\"x\": true, \"y\": false}", [objVal [("x", trueVal), ("y", falseVal)]])
+        , ("num0", "0", [numVal (read "0")])
+        , ("num1", "123", [numVal (read "123")])
+        , ("num2", "123.45", [numVal (read "123.45")])
+        , ("num3", "1e100", [numVal (read "1e100")])
+        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", [objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]])
         ]
   in testJsonTrees cases
 

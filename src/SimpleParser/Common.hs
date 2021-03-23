@@ -13,10 +13,12 @@ module SimpleParser.Common
   , scientificParser
   , signedParser
   , escapedStringParser
+  , spanParser
   ) where
 
 import Control.Applicative (Alternative (..))
 import Control.Monad (void)
+import Control.Monad.State (get)
 import Data.Char (digitToInt, isDigit, isSpace)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
@@ -24,7 +26,7 @@ import qualified Data.Scientific as Sci
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, satisfyToken,
                            takeTokensWhile1)
 import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser)
-import SimpleParser.Stream (Chunked (..), Stream (..))
+import SimpleParser.Stream (Chunked (..), Span (..), Stream (..), StreamWithPos (..))
 
 -- | Yields the maximal list of separated items. May return an empty list.
 sepByParser :: Monad m =>
@@ -137,7 +139,7 @@ escapedStringParser :: (Stream s, Token s ~ Char, Monad m) => Char -> ParserT e 
 escapedStringParser quoteChar =
   let quoteParser = void (matchToken quoteChar)
       accParser = foldTokensWhile go (Pair [] False)
-      innerParser = fmap (\(Pair acc _) -> tokensToChunk (reverse acc)) accParser
+      innerParser = fmap (\(Pair acc _) -> revTokensToChunk acc) accParser
       escChar = '\\'
       go c (Pair acc esc)
         | c == escChar =
@@ -153,3 +155,11 @@ escapedStringParser quoteChar =
             then (True, Pair (c:escChar:acc) False) -- Was a non-quote esc, add back
             else (True, Pair (c:acc) False) -- Just consume char
   in betweenParser quoteParser quoteParser innerParser
+
+-- | Adds span information to parsed values.
+spanParser :: (StreamWithPos p s, Monad m) => (Span p -> a -> b) -> ParserT e s m a -> ParserT e s m b
+spanParser f p = do
+  start <- get
+  val <- p
+  end <- get
+  pure (f (Span (viewStreamPos start) (viewStreamPos end)) val)

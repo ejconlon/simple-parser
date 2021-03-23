@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 75dce112167996365d766b2b257f20ae9fa00fa5e6efc152895b0175f38c2414
+-- hash: 96139a0d53610fb21df1dcd81fc92f462d336f5d868e051f7039db386df55cfc
 
 name:           simple-parser
 version:        0.2.3
@@ -31,6 +31,7 @@ library
       SimpleParser
       SimpleParser.Common
       SimpleParser.Examples.Json
+      SimpleParser.Examples.Sexp
       SimpleParser.Input
       SimpleParser.Parser
       SimpleParser.Result
@@ -39,7 +40,7 @@ library
       Paths_simple_parser
   hs-source-dirs:
       src
-  default-extensions: BangPatterns DeriveFunctor DeriveFoldable DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses TypeFamilies
+  default-extensions: BangPatterns ConstraintKinds DeriveFunctor DeriveFoldable DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds
   build-depends:
       base >=4.12 && <5
@@ -58,7 +59,7 @@ test-suite simple-parser-test
       Paths_simple_parser
   hs-source-dirs:
       test
-  default-extensions: BangPatterns DeriveFunctor DeriveFoldable DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses TypeFamilies
+  default-extensions: BangPatterns ConstraintKinds DeriveFunctor DeriveFoldable DeriveTraversable DerivingStrategies FlexibleContexts FlexibleInstances FunctionalDependencies GeneralizedNewtypeDeriving KindSignatures MultiParamTypeClasses TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.12 && <5

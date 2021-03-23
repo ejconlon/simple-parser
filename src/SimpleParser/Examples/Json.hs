@@ -4,10 +4,12 @@ module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
   , parseJson
+  , rootJsonParser
+  , jsonParser
   ) where
 
 import Control.Monad (void)
--- import Data.Scientific (Scientific)
+import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser
@@ -18,7 +20,7 @@ data JsonF a =
   | JsonArray ![a]
   | JsonString !Text
   | JsonBool !Bool
-  -- | JsonNum !Scientific
+  | JsonNum !Scientific
   | JsonNull
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
@@ -70,6 +72,9 @@ nullParser = JsonNull <$ nullTok
 boolParser :: JsonParser (JsonF a)
 boolParser = isolateParser (branchParser [JsonBool True <$ trueTok, JsonBool False <$ falseTok])
 
+numParser :: JsonParser (JsonF a)
+numParser = fmap JsonNum scientificParser
+
 objectPairParser :: JsonParser a -> JsonParser (Text, a)
 objectPairParser root = do
   name <- rawStringParser
@@ -83,17 +88,17 @@ objectParser pairParser = betweenParser openBrace closeBrace (fmap JsonObject (s
 arrayParser :: JsonParser a -> JsonParser (JsonF a)
 arrayParser root = betweenParser openBracket closeBracket (fmap JsonArray (sepByParser root comma))
 
-rootParser :: JsonParser a -> JsonParser (JsonF a)
-rootParser root = isolateParser (branchParser opts) where
+rootJsonParser :: JsonParser a -> JsonParser (JsonF a)
+rootJsonParser root = isolateParser (branchParser opts) where
   pairParser = objectPairParser root
   opts =
     [ objectParser pairParser
     , arrayParser root
     , stringParser
-    -- , numParser
+    , numParser
     , boolParser
     , nullParser
     ]
 
 jsonParser :: JsonParser Json
-jsonParser = let p = fmap Json (rootParser p) in p
+jsonParser = let p = fmap Json (rootJsonParser p) in p
