@@ -23,25 +23,33 @@ import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, satisfyToken,
                            takeTokensWhile1)
-import SimpleParser.Parser (ParserT, defaultParser, optionalParser)
+import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser)
 import SimpleParser.Stream (Chunked (..), Stream (..))
 
-sepByParser :: Monad m => ParserT e s m a -> ParserT e s m () -> ParserT e s m [a]
-sepByParser thing sep = go [] where
-  optThing = optionalParser thing
-  optSep = optionalParser sep
-  go !acc = do
-    ma <- optThing
-    case ma of
-      Nothing -> if null acc then pure [] else empty
-      Just a -> do
-        let newAcc = a:acc
-        ms <- optSep
-        case ms of
-          Nothing -> pure (reverse newAcc)
-          Just () -> go newAcc
+-- | Yields the maximal list of separated items. May return an empty list.
+sepByParser :: Monad m =>
+  -- | How to parse item
+  ParserT e s m a ->
+  -- | How to parse separator
+  ParserT e s m () ->
+  ParserT e s m [a]
+sepByParser thing sep = do
+  ma <- optionalParser thing
+  case ma of
+    Nothing -> pure []
+    Just a -> do
+      as <- greedyStarParser (sep *> thing)
+      pure (a : as)
 
-betweenParser :: Monad m => ParserT e s m () -> ParserT e s m () -> ParserT e s m a -> ParserT e s m a
+-- | Parses between start and end markers.
+betweenParser :: Monad m =>
+  -- | How to parse start
+  ParserT e s m () ->
+  -- | How to parse end
+  ParserT e s m () ->
+  -- | How to parse inside
+  ParserT e s m a ->
+  ParserT e s m a
 betweenParser start end thing = do
   start
   a <- thing
@@ -122,6 +130,9 @@ signedParser spc p = defaultParser id (lexemeParser spc sign) <*> p where
 
 data Pair = Pair ![Char] !Bool
 
+-- | Given a quote charcter (like a single or double quote), yields the contents of the
+-- string bounded by those quotes. The contents may contain backslash-escaped quotes.
+-- Returns nothing if outside quotes are missing or the stream ends before unquote.
 escapedStringParser :: (Stream s, Token s ~ Char, Monad m) => Char -> ParserT e s m (Chunk s)
 escapedStringParser quoteChar =
   let quoteParser = void (matchToken quoteChar)
