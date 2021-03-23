@@ -10,3 +10,7 @@ Simple parser combinators following the clever refrain (by Fritz Ruehr?)
     Of things and strings.
 
 In this case, we subsitute `ListT` for the list and add some error handling. We also swap out strings for any kind of input (streaming or not).
+
+## License
+
+This project is BSD-licenced. Some gnarly functions to parse numbers and such have been adapted from Megaparsec, which is also [BSD-licensed](https://github.com/mrkkrp/megaparsec/blob/master/LICENSE.md).

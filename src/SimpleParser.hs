@@ -4,12 +4,14 @@
 -- "SimpleParser.Parser" for the core transformer, "SimpleParser.Stream" for the source abstraction,
 -- or "SimpleParser.Input" for useful combinators.
 module SimpleParser
-  ( module SimpleParser.Input
+  ( module SimpleParser.Common
+  , module SimpleParser.Input
   , module SimpleParser.Parser
   , module SimpleParser.Result
   , module SimpleParser.Stream
   ) where
 
+import SimpleParser.Common
 import SimpleParser.Input
 import SimpleParser.Parser
 import SimpleParser.Result

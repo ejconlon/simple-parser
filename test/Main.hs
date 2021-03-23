@@ -598,8 +598,7 @@ test_json =
         , ("str1", "\"x\"", [strVal "x"])
         , ("str2", "\"xy\"", [strVal "xy"])
         , ("str3", "\"xyz\"", [strVal "xyz"])
-        -- TODO(ejconlon) Refine parser to make this pass
-        -- , ("str4", "\"xy\\\"z\"", [strVal "xy\"z"])
+        , ("str4", "\"xy\\\"z\"", [strVal "xy\"z"])
         , ("obj0", "{}", [objVal []])
         , ("obj1", "{\"x\": true}", [objVal [("x", trueVal)]])
         , ("obj2", "{\"x\": true, \"y\": false}", [objVal [("x", trueVal), ("y", falseVal)]])

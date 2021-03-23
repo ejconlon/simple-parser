@@ -75,21 +75,21 @@ satisfyToken p = do
     _ -> empty
 
 -- | Folds over a stream of tokens while the boolean value is true.
--- Always succeeds, even at end of stream.
-foldTokensWhile :: (Stream s, Monad m) => (Token s -> x -> (Bool, x)) -> (x -> x) -> x -> ParserT e s m x
-foldTokensWhile f g = go where
+-- Always succeeds, even at end of stream. Only consumes greediest match.
+foldTokensWhile :: (Stream s, Monad m) => (Token s -> x -> (Bool, x)) -> x -> ParserT e s m x
+foldTokensWhile processNext = go where
   go !x = do
     m <- peekToken
     case m of
-      Nothing -> pure (g x)
+      Nothing -> pure x
       Just c ->
-        let (ok, newX) = f c x
+        let (ok, newX) = processNext c x
         in if ok
           then popToken *> go newX
           else pure x
 
 -- | Take tokens into a chunk while they satisfy the given predicate.
--- Always succeeds, even at end of stream. May return an empty chunk.
+-- Always succeeds, even at end of stream. May return an empty chunk. Only yields greediest match.
 takeTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (Chunk s)
 takeTokensWhile = state . streamTakeWhile
 
@@ -99,7 +99,7 @@ takeTokensWhile1 :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m (C
 takeTokensWhile1 pcate = takeTokensWhile pcate >>= \c -> if chunkEmpty c then empty else pure c
 
 -- | Drop tokens and return chunk size while they satisfy the given predicate.
--- Always succeeds, even at end of stream. May return empty chunk size 0.
+-- Always succeeds, even at end of stream. May return empty chunk size 0. Only drops greediest match.
 dropTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT e s m Int
 dropTokensWhile = state . streamDropWhile
 

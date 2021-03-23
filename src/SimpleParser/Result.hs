@@ -4,6 +4,7 @@ module SimpleParser.Result
   , parseSuccessResult
   , parseErrorResult
   , parseValue
+  , parseResult
   ) where
 
 -- | Strict 'Either' for parse results.
@@ -29,3 +30,9 @@ parseSuccessResult = ParseResult . ParseSuccess
 
 parseErrorResult :: e -> s -> ParseResult e s a
 parseErrorResult = ParseResult . ParseError
+
+parseResult :: (e -> s -> r) -> (a -> s -> r) -> ParseResult e s a -> r
+parseResult onError onSuccess (ParseResult value st) =
+  case value of
+    ParseError e -> onError e st
+    ParseSuccess a -> onSuccess a st
