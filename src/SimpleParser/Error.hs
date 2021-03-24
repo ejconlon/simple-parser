@@ -4,9 +4,9 @@ module SimpleParser.Error
   , ErrorPos (..)
   , EmbedErrorPos (..)
   , getStreamPos
-  , mapStateErrorParser
+  , mapErrorStateParser
   , voidErrorParser
-  , errorPosParser
+  , errorSpanParser
   ) where
 
 import Control.Applicative (empty)
@@ -18,34 +18,40 @@ import SimpleParser.Parser (ParserT (..))
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
 import SimpleParser.Stream (Span (..), StreamWithPos (..))
 
+-- | A bundle of errors!
 newtype ErrorBundle e = ErrorBundle (NonEmpty e)
   deriving (Eq, Show, Semigroup, Functor, Foldable, Traversable)
 
+-- | Errors that can embed 'ErrorBundle'
 class EmbedErrorBundle e d | d -> e where
-  embedErrorBundle :: NonEmpty e -> d
+  embedErrorBundle :: ErrorBundle e -> d
 
 instance EmbedErrorBundle e (ErrorBundle e) where
-  embedErrorBundle = ErrorBundle
+  embedErrorBundle = id
 
+-- | An error with position.
 data ErrorPos p e = ErrorPos
   { epPos :: !p
   , epError :: !e
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
+-- | Errors that can embed an error with position
 class EmbedErrorPos p e d | d -> p e where
-  embedErrorPos :: p -> e -> d
+  embedErrorPos :: ErrorPos p e -> d
 
 instance EmbedErrorPos p e (ErrorPos p e) where
-  embedErrorPos = ErrorPos
+  embedErrorPos = id
 
+-- | Gets the current stream position
 getStreamPos :: (StreamWithPos p s, Monad m) => ParserT e s m p
 getStreamPos = gets viewStreamPos
 
-mapStateErrorParser :: Monad m => (s -> e -> d) -> ParserT e s m a -> ParserT d s m a
-mapStateErrorParser f p = ParserT (fmap go . runParserT p) where
+-- | Map over the error and state at error to change the error type of the parser.
+mapErrorStateParser :: Monad m => (e -> s -> d) -> ParserT e s m a -> ParserT d s m a
+mapErrorStateParser f p = ParserT (fmap go . runParserT p) where
   go (ParseResult v t) =
     case v of
-      ParseError e -> ParseResult (ParseError (f t e)) t
+      ParseError e -> ParseResult (ParseError (f e t)) t
       ParseSuccess a -> ParseResult (ParseSuccess a) t
 
 -- | Drop all errors from the parse results. Unlike 'silenceParser', this
@@ -57,7 +63,8 @@ voidErrorParser p = ParserT (runParserT p >=> go) where
       ParseError _ -> empty
       ParseSuccess a -> pure (ParseResult (ParseSuccess a) t)
 
-errorPosParser :: (StreamWithPos p s, EmbedErrorPos (Span p) e d, Monad m) => ParserT e s m a -> ParserT d s m a
-errorPosParser p = do
+-- | Add spans to all errors in the given parser.
+errorSpanParser :: (StreamWithPos p s, EmbedErrorPos (Span p) e d, Monad m) => ParserT e s m a -> ParserT d s m a
+errorSpanParser p = do
   start <- getStreamPos
-  mapStateErrorParser (embedErrorPos . Span start . viewStreamPos) p
+  mapErrorStateParser (\e s -> embedErrorPos (ErrorPos (Span start (viewStreamPos s)) e)) p
