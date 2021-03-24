@@ -16,7 +16,7 @@ import Data.Text (Text)
 import SimpleParser.Common (betweenParser, decimalParser, escapedStringParser, lexemeParser, scientificParser,
                             sepByParser, signedParser, spaceParser)
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Parser (ParserT, branchParser, isolateParser)
+import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
 import SimpleParser.Stream (Chunked (..), TextualStream, packChunk)
 
 data Atom =
@@ -40,7 +40,7 @@ sexpParser :: SexpParser s m => ParserT e s m Sexp
 sexpParser = let p = fmap Sexp (rootSexpParser p) in p
 
 rootSexpParser :: SexpParser s m => ParserT e s m a -> ParserT e s m (SexpF a)
-rootSexpParser root = isolateParser $ branchParser
+rootSexpParser root = isolateParser $ andAllParser
   [ fmap SexpList (listP root)
   , fmap SexpAtom atomP
   ]
@@ -82,7 +82,7 @@ floatP :: SexpParser s m => ParserT e s m Scientific
 floatP = signedParser (pure ()) scientificParser
 
 atomP :: SexpParser s m => ParserT e s m Atom
-atomP = lexP $ isolateParser $ branchParser
+atomP = lexP $ isolateParser $ andAllParser
   [ fmap AtomString stringP
   , fmap AtomInt intP
   , fmap AtomFloat floatP

@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 96139a0d53610fb21df1dcd81fc92f462d336f5d868e051f7039db386df55cfc
+-- hash: 04ba1fd3a6466975438f06afe5538e1bcf11d4bf3ca68948a6e21dcf8ce95317
 
 name:           simple-parser
-version:        0.2.3
+version:        0.3.0
 synopsis:       Simple parser combinators
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
 category:       Parsing
@@ -29,7 +29,10 @@ source-repository head
 library
   exposed-modules:
       SimpleParser
+      SimpleParser.Assert
       SimpleParser.Common
+      SimpleParser.Context
+      SimpleParser.Error
       SimpleParser.Examples.Json
       SimpleParser.Examples.Sexp
       SimpleParser.Input

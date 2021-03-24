@@ -14,7 +14,7 @@ import Data.Text (Text)
 import SimpleParser.Common (betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
                             spaceParser)
 import SimpleParser.Input (matchChunk, matchToken)
-import SimpleParser.Parser (ParserT, branchParser, isolateParser)
+import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
 import SimpleParser.Stream (Stream (..), TextualChunked (..), TextualStream)
 
 data JsonF a =
@@ -34,7 +34,7 @@ jsonParser :: JsonParser s m => ParserT e s m Json
 jsonParser = let p = fmap Json (rootJsonParser p) in p
 
 rootJsonParser :: JsonParser s m => ParserT e s m a -> ParserT e s m (JsonF a)
-rootJsonParser root = isolateParser (branchParser opts) where
+rootJsonParser root = isolateParser (andAllParser opts) where
   pairP = objectPairP root
   opts =
     [ objectP pairP
@@ -81,7 +81,7 @@ nullP:: JsonParser s m => ParserT e s m (JsonF a)
 nullP = JsonNull <$ nullTokP
 
 boolP:: JsonParser s m => ParserT e s m (JsonF a)
-boolP= isolateParser (branchParser [JsonBool True <$ trueTokP, JsonBool False <$ falseTokP])
+boolP= isolateParser (andAllParser [JsonBool True <$ trueTokP, JsonBool False <$ falseTokP])
 
 numP:: JsonParser s m => ParserT e s m (JsonF a)
 numP= fmap JsonNum scientificParser

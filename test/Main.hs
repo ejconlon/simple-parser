@@ -211,9 +211,9 @@ test_greedy_plus_unit =
         ]
   in testParserTrees parser cases
 
-test_branch :: [TestTree]
-test_branch =
-  let parser = branchParser [matchToken 'h', matchToken 'x']
+test_or :: [TestTree]
+test_or =
+  let parser = orParser (matchToken 'h') (matchToken 'x')
       cases =
         [ ("empty", InputOutput "" [])
         , ("first", InputOutput "hi" [parseSuccessResult 'h' (OffsetStream 1 "i")])
@@ -222,9 +222,9 @@ test_branch =
         ]
   in testParserTrees parser cases
 
-test_branch_first :: [TestTree]
-test_branch_first =
-  let parser = branchParser [anyToken $> 'h', matchToken 'x']
+test_or_first :: [TestTree]
+test_or_first =
+  let parser = orParser (anyToken $> 'h') (matchToken 'x')
       cases =
         [ ("empty", InputOutput "" [])
         , ("first", InputOutput "hi" [parseSuccessResult 'h' (OffsetStream 1 "i")])
@@ -232,19 +232,21 @@ test_branch_first =
         ]
   in testParserTrees parser cases
 
-test_branch_second :: [TestTree]
-test_branch_second =
-  let parser = branchParser [empty, anyToken $> 'x']
+test_or_all :: [TestTree]
+test_or_all =
+  let state = OffsetStream 1 "i"
+      parser = orAllParser [matchToken 'h', anyToken $> 'y', matchToken 'x']
       cases =
         [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [parseSuccessResult 'x' (OffsetStream 1 "i")])
-        , ("second", InputOutput "xi" [parseSuccessResult 'x' (OffsetStream 1 "i")])
+        , ("first", InputOutput "hi" [parseSuccessResult 'h' state])
+        , ("middle", InputOutput "zi" [parseSuccessResult 'y' state])
+        , ("last", InputOutput "xi" [parseSuccessResult 'y' state])
         ]
   in testParserTrees parser cases
 
-test_combine :: [TestTree]
-test_combine =
-  let parser = asum [matchToken 'h', matchToken 'x']
+test_and :: [TestTree]
+test_and =
+  let parser = andParser (matchToken 'h') (matchToken 'x')
       cases =
         [ ("empty", InputOutput "" [])
         , ("first", InputOutput "hi" [parseSuccessResult 'h' (OffsetStream 1 "i")])
@@ -253,10 +255,10 @@ test_combine =
         ]
   in testParserTrees parser cases
 
-test_combine_first :: [TestTree]
-test_combine_first =
+test_and_first :: [TestTree]
+test_and_first =
   let state = OffsetStream 1 "i"
-      parser = asum [anyToken $> 'h', matchToken 'x']
+      parser = andParser (anyToken $> 'h') (matchToken 'x')
       cases =
         [ ("empty", InputOutput "" [])
         , ("first", InputOutput "hi" [parseSuccessResult 'h' state])
@@ -264,14 +266,38 @@ test_combine_first =
         ]
   in testParserTrees parser cases
 
-test_combine_second :: [TestTree]
-test_combine_second =
+test_and_second :: [TestTree]
+test_and_second =
   let state = OffsetStream 1 "i"
-      parser = asum [empty, anyToken $> 'x']
+      parser = andParser empty (anyToken $> 'x')
       cases =
         [ ("empty", InputOutput "" [])
         , ("first", InputOutput "hi" [parseSuccessResult 'x' state])
         , ("second", InputOutput "xi" [parseSuccessResult 'x' state])
+        ]
+  in testParserTrees parser cases
+
+test_and_all :: [TestTree]
+test_and_all =
+  let state = OffsetStream 1 "i"
+      parser = andAllParser [matchToken 'h', anyToken $> 'y', matchToken 'x']
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("first", InputOutput "hi" [parseSuccessResult 'h' state, parseSuccessResult 'y' state])
+        , ("middle", InputOutput "zi" [parseSuccessResult 'y' state])
+        , ("last", InputOutput "xi" [parseSuccessResult 'y' state, parseSuccessResult 'x' state])
+        ]
+  in testParserTrees parser cases
+
+test_asum :: [TestTree]
+test_asum =
+  let state = OffsetStream 1 "i"
+      parser = asum [matchToken 'h', anyToken $> 'y', matchToken 'x']
+      cases =
+        [ ("empty", InputOutput "" [])
+        , ("first", InputOutput "hi" [parseSuccessResult 'h' state, parseSuccessResult 'y' state])
+        , ("middle", InputOutput "zi" [parseSuccessResult 'y' state])
+        , ("last", InputOutput "xi" [parseSuccessResult 'y' state, parseSuccessResult 'x' state])
         ]
   in testParserTrees parser cases
 

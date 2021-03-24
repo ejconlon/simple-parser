@@ -110,8 +110,16 @@ dropTokensWhile1 pcate = dropTokensWhile pcate >>= \s -> if s == 0 then empty el
 
 -- | Match token with equality or terminate the parser at inequality or end of stream.
 matchToken :: (Stream s, Monad m, Eq (Token s)) => Token s -> ParserT e s m (Token s)
-matchToken = satisfyToken . (==)
+matchToken t = do
+  mu <- popToken
+  case mu of
+    Just u | t == u -> pure u
+    _ -> empty
 
 -- | Match chunk with equality or terminate the parser at inequality or end of stream.
 matchChunk :: (Stream s, Monad m, Eq (Chunk s)) => Chunk s -> ParserT e s m (Chunk s)
-matchChunk k = popChunk (chunkLength k) >>= maybe empty (\j -> if k == j then pure j else empty)
+matchChunk k = do
+  mj <- popChunk (chunkLength k)
+  case mj of
+    Just j | k == j -> pure j
+    _ -> empty
