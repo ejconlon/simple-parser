@@ -21,6 +21,9 @@ module SimpleParser.Parser
   , greedyPlusParser
   , greedyPlusParser_
   , lookAheadParser
+  , mapErrorStateParser
+  , traverseErrorStateParser
+  , voidErrorParser
   ) where
 
 import Control.Applicative (Alternative (..), liftA2)
@@ -31,6 +34,7 @@ import Control.Monad.Morph (MFunctor (..))
 import Control.Monad.State (MonadState (..))
 import Control.Monad.Trans (MonadTrans (..))
 import Data.Foldable (toList)
+import Data.Void (Void)
 import ListT (ListT (..))
 import qualified ListT
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
@@ -284,3 +288,29 @@ lookAheadParser parser = do
     v <- parser
     put s
     pure v
+
+-- | Traverse the error and thrown state to change the error type of the parser.
+traverseErrorStateParser :: Monad m => (e -> s -> m d) -> ParserT e s m a -> ParserT d s m a
+traverseErrorStateParser f p = ParserT (ListT . go . runParserT p) where
+  go listt = do
+    m <- ListT.uncons listt
+    case m of
+      Nothing -> pure Nothing
+      Just (ParseResult v t, nextListt) -> do
+        w <- case v of
+          ParseError e -> fmap ParseError (f e t)
+          ParseSuccess a -> pure (ParseSuccess a)
+        pure (Just (ParseResult w t, ListT (go nextListt)))
+
+-- | Map over the error and thrown state to change the error type of the parser.
+mapErrorStateParser :: Monad m => (e -> s -> d) -> ParserT e s m a -> ParserT d s m a
+mapErrorStateParser f = traverseErrorStateParser (\e s -> pure (f e s))
+
+-- | Drop all errors from the parse results. Unlike 'silenceParser', this
+-- changes the error type of the parser so that no further errors can be thrown.
+voidErrorParser :: Monad m => ParserT e s m a -> ParserT Void s m a
+voidErrorParser p = ParserT (runParserT p >=> go) where
+  go (ParseResult v t) =
+    case v of
+      ParseError _ -> empty
+      ParseSuccess a -> pure (ParseResult (ParseSuccess a) t)

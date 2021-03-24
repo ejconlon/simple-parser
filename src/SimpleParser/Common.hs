@@ -14,11 +14,12 @@ module SimpleParser.Common
   , signedParser
   , escapedStringParser
   , spanParser
+  , getStreamPos
   ) where
 
 import Control.Applicative (Alternative (..))
 import Control.Monad (void)
-import Control.Monad.State (get)
+import Control.Monad.State (get, gets)
 import Data.Char (digitToInt, isDigit, isSpace)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
@@ -163,3 +164,7 @@ spanParser f p = do
   val <- p
   end <- get
   pure (f (Span (viewStreamPos start) (viewStreamPos end)) val)
+
+-- | Gets the current stream position
+getStreamPos :: (StreamWithPos p s, Monad m) => ParserT e s m p
+getStreamPos = gets viewStreamPos

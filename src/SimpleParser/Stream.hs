@@ -177,9 +177,13 @@ newOffsetStream = OffsetStream 0
 -- | A stream that has maintains a short, meaningful position.
 class (Ord p, Stream s) => StreamWithPos p s | s -> p where
   viewStreamPos :: s -> p
+  setStreamPos :: p -> s -> s
+  overStreamPos :: (p -> p) -> s -> s
+  overStreamPos f s = setStreamPos (f (viewStreamPos s)) s
 
 instance Stream s => StreamWithPos Int (OffsetStream s) where
   viewStreamPos = osOffset
+  setStreamPos p s = s { osOffset = p }
 
 -- | A 0-based line/col position in a character-based stream.
 data Pos = Pos
@@ -221,6 +225,7 @@ instance (Stream s, Token s ~ Char) => Stream (PosStream s) where
 
 instance (Stream s, Token s ~ Char) => StreamWithPos Pos (PosStream s) where
   viewStreamPos = psPos
+  setStreamPos p s = s { psPos = p }
 
 newPosStream :: s -> PosStream s
 newPosStream = PosStream initPos
