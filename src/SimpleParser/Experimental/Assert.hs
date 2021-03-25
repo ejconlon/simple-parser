@@ -19,9 +19,8 @@ module SimpleParser.Experimental.Assert
   , assertDropTokensWhile1
   ) where
 
-import Control.Monad ((>=>))
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Trans (lift)
+import Control.Monad.Reader (Reader, asks, runReader)
 import SimpleParser.Chunked (chunkLength)
 import SimpleParser.Input (anyChunk, anyToken, dropTokensWhile1, peekToken, popChunk, popToken, takeTokensWhile1)
 import SimpleParser.Parser (ParserT, orParser)
@@ -50,52 +49,52 @@ instance (Eq (Token s), Eq (Chunk s)) => Eq (StreamAssertError s) where
 instance (Show (Token s), Show (Chunk s)) => Show (StreamAssertError s) where
   showsPrec d (StreamAssertError e) = showParen (d > 10) (showString "StreamAssertError " . showsPrec (succ d) e)
 
-class MatchStreamAssertError e s where
+class MatchStreamAssertError s e where
   matchStreamAssertError :: e -> Maybe (StreamAssertError s)
 
-instance MatchStreamAssertError (StreamAssertError s) s where
+instance MatchStreamAssertError s (StreamAssertError s) where
   matchStreamAssertError = Just
 
 -- | Errors that embed 'StreamAssertError'
-class MatchStreamAssertError e s => EmbedStreamAssertError e s where
+class MatchStreamAssertError s e => EmbedStreamAssertError s e where
   embedStreamAssertError :: StreamAssertError s -> e
 
-instance EmbedStreamAssertError (StreamAssertError s) s where
+instance EmbedStreamAssertError s (StreamAssertError s) where
   embedStreamAssertError = id
 
 -- | Errors that use some monadic state to enrich 'StreamAssertError'
-class (MatchStreamAssertError e s, Monad m) => EnrichStreamAssertError e s m where
+class (MatchStreamAssertError s e, Monad m) => EnrichStreamAssertError s e m where
   enrichStreamAssertError :: StreamAssertError s -> m e
 
-instance Monad m => EnrichStreamAssertError (StreamAssertError s) s m where
+instance Monad m => EnrichStreamAssertError s (StreamAssertError s) m where
   enrichStreamAssertError = pure
 
-throwStreamAssertError :: EnrichStreamAssertError e s m => StreamAssertError s -> ParserT e s m a
-throwStreamAssertError = (lift . enrichStreamAssertError) >=> throwError
+throwStreamAssertError :: (EnrichStreamAssertError s e (Reader r), Monad m) => StreamAssertError s -> ParserT r s e m a
+throwStreamAssertError e = asks (runReader (enrichStreamAssertError e)) >>= throwError
 
-throwAssertError :: EnrichStreamAssertError e s m => AssertError (Chunk s) (Token s) -> ParserT e s m a
+throwAssertError :: (EnrichStreamAssertError s e (Reader r), Monad m) => AssertError (Chunk s) (Token s) -> ParserT r s e m a
 throwAssertError = throwStreamAssertError . StreamAssertError
 
-catchStreamAssertError :: (MatchStreamAssertError e s, Monad m) => ParserT e s m a -> (StreamAssertError s -> ParserT e s m a) -> ParserT e s m a
+catchStreamAssertError :: (MatchStreamAssertError s e, Monad m) => ParserT r s e m a -> (StreamAssertError s -> ParserT r s e m a) -> ParserT r s e m a
 catchStreamAssertError parser handler = catchError parser (\e -> maybe (throwError e) handler (matchStreamAssertError e))
 
 -- | Contraint for parsers that can throw 'AssertError'
-type ParserWithAssert e s m = (Stream s, EnrichStreamAssertError e s m)
+type ParserWithAssert r s e m = (Stream s, EnrichStreamAssertError s e (Reader r), Monad m)
 
 -- | 'matchEnd' or throw an 'AssertError'
-assertMatchEnd :: ParserWithAssert e s m => ParserT e s m ()
+assertMatchEnd :: ParserWithAssert r s e m => ParserT r s e m ()
 assertMatchEnd = peekToken >>= maybe (pure ()) (throwAssertError . AssertMatchEndError)
 
 -- | 'anyToken' or throw an 'AssertError'
-assertAnyToken :: ParserWithAssert e s m => ParserT e s m (Token s)
+assertAnyToken :: ParserWithAssert r s e m => ParserT r s e m (Token s)
 assertAnyToken = orParser anyToken (throwAssertError AssertAnyTokenError)
 
 -- | 'anyChunk' or throw an 'AssertError'
-assertAnyChunk :: ParserWithAssert e s m => Int -> ParserT e s m (Chunk s)
+assertAnyChunk :: ParserWithAssert r s e m => Int -> ParserT r s e m (Chunk s)
 assertAnyChunk n = orParser (anyChunk n) (throwAssertError AssertAnyChunkError)
 
 -- | 'satisfyToken' or throw an 'AssertError'
-assertSatisfyToken :: ParserWithAssert e s m => (Token s -> Bool) -> ParserT e s m (Token s)
+assertSatisfyToken :: ParserWithAssert r s e m => (Token s -> Bool) -> ParserT r s e m (Token s)
 assertSatisfyToken pcate = do
   m <- popToken
   case m of
@@ -103,7 +102,7 @@ assertSatisfyToken pcate = do
     _ -> throwAssertError (AssertSatisfyTokenError m)
 
 -- | 'matchToken' or throw an 'AssertError'
-assertMatchToken :: (ParserWithAssert e s m, Eq (Token s)) => Token s -> ParserT e s m (Token s)
+assertMatchToken :: (ParserWithAssert r s e m, Eq (Token s)) => Token s -> ParserT r s e m (Token s)
 assertMatchToken t = do
   mu <- popToken
   case mu of
@@ -111,7 +110,7 @@ assertMatchToken t = do
     _ -> throwAssertError (AssertMatchTokenError mu)
 
 -- | 'matchChunk' or throw an 'AssertError'
-assertMatchChunk :: (ParserWithAssert e s m, Eq (Chunk s)) => Chunk s -> ParserT e s m (Chunk s)
+assertMatchChunk :: (ParserWithAssert r s e m, Eq (Chunk s)) => Chunk s -> ParserT r s e m (Chunk s)
 assertMatchChunk k = do
   mj <- popChunk (chunkLength k)
   case mj of
@@ -119,9 +118,9 @@ assertMatchChunk k = do
     _ -> throwAssertError (AssertMatchChunkError mj)
 
 -- | 'takeTokensWhile1' or throw an 'AssertError'
-assertTakeTokensWhile1 :: ParserWithAssert e s m => (Token s -> Bool) -> ParserT e s m (Chunk s)
+assertTakeTokensWhile1 :: ParserWithAssert r s e m => (Token s -> Bool) -> ParserT r s e m (Chunk s)
 assertTakeTokensWhile1 pcate = orParser (takeTokensWhile1 pcate) (peekToken >>= throwAssertError . AssertTakeTokensWhile1Error)
 
 -- | 'dropTokensWhile1' or throw an 'AssertError'
-assertDropTokensWhile1 :: ParserWithAssert e s m => (Token s -> Bool) -> ParserT e s m Int
+assertDropTokensWhile1 :: ParserWithAssert r s e m => (Token s -> Bool) -> ParserT r s e m Int
 assertDropTokensWhile1 pcate = orParser (dropTokensWhile1 pcate) (peekToken >>= throwAssertError . AssertDropTokensWhile1Error)

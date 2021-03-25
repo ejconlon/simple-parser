@@ -13,26 +13,26 @@ data ParseValue e a =
   | ParseSuccess !a
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-parseValue :: (e -> r) -> (a -> r) -> ParseValue e a -> r
+parseValue :: (e -> z) -> (a -> z) -> ParseValue e a -> z
 parseValue onError onSuccess value =
   case value of
     ParseError e -> onError e
     ParseSuccess a -> onSuccess a
 
 -- | Strict pair of parse result and state at the time it was yielded.
-data ParseResult e s a = ParseResult
-  { prValue :: !(ParseValue e a)
-  , prState :: !s
+data ParseResult s e a = ParseResult
+  { prState :: !s
+  , prValue :: !(ParseValue e a)
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
-parseSuccessResult :: a -> s -> ParseResult e s a
-parseSuccessResult = ParseResult . ParseSuccess
+parseSuccessResult :: s -> a -> ParseResult s e a
+parseSuccessResult st = ParseResult st . ParseSuccess
 
-parseErrorResult :: e -> s -> ParseResult e s a
-parseErrorResult = ParseResult . ParseError
+parseErrorResult :: s -> e -> ParseResult s e a
+parseErrorResult st = ParseResult st . ParseError
 
-parseResult :: (e -> s -> r) -> (a -> s -> r) -> ParseResult e s a -> r
-parseResult onError onSuccess (ParseResult value st) =
+parseResult :: (s -> e -> z) -> (s -> a -> z) -> ParseResult s e a -> z
+parseResult onError onSuccess (ParseResult st value) =
   case value of
-    ParseError e -> onError e st
-    ParseSuccess a -> onSuccess a st
+    ParseError e -> onError st e
+    ParseSuccess a -> onSuccess st a

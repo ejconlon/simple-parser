@@ -2,16 +2,12 @@ module SimpleParser.Experimental.Context
   ( ContextStack (..)
   , pushContext
   , HasContextStack (..)
-  , MonadContext
   , localPushContext
   , askContextStack
   ) where
 
 import Control.Monad.Reader (MonadReader (..), asks)
-import Control.Monad.Trans (lift)
 import Data.Sequence (Seq (..))
-import ListT (ListT (..))
-import qualified ListT
 import SimpleParser.Parser (ParserT (..))
 
 -- | Stack of labels representing contexts in the parse tree.
@@ -35,13 +31,10 @@ instance HasContextStack c (ContextStack c) where
   setContextStack = const
   overContextStack = id
 
--- | Contstraint for those monads that can read a 'ContextStack'.
-type MonadContext c r m = (HasContextStack c r, MonadReader r m)
-
 -- | Push a label onto a context stack in the scope of a parser.
-localPushContext :: MonadContext c r m => c -> ParserT e s m a -> ParserT e s m a
-localPushContext label parser = ParserT (ListT . local (overContextStack (pushContext label)) . ListT.uncons . runParserT parser)
+localPushContext :: (HasContextStack c r, Monad m) => c -> ParserT r s e m a -> ParserT r s e m a
+localPushContext = local . overContextStack . pushContext
 
 -- | Read a 'ContextStack'.
-askContextStack :: MonadContext c r m => ParserT e s m (ContextStack c)
-askContextStack = lift (asks viewContextStack)
+askContextStack :: (HasContextStack c r, Monad m) => ParserT r s e m (ContextStack c)
+askContextStack = asks viewContextStack
