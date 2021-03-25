@@ -8,7 +8,8 @@ module SimpleParser.Experimental.Report
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (Reader, asks)
 import SimpleParser.Common (getStreamPos)
-import SimpleParser.Experimental.Assert (EmbedStreamAssertError (..), EnrichStreamAssertError (..), MatchStreamAssertError (..))
+import SimpleParser.Experimental.Assert (EmbedStreamAssertError (..), EnrichStreamAssertError (..),
+                                         MatchStreamAssertError (..))
 import SimpleParser.Experimental.Context (ContextStack, HasContextStack (..), askContextStack)
 import SimpleParser.Parser (ParserT, mapErrorParser)
 import SimpleParser.Stream (Span (..), StreamWithPos (..))
@@ -35,6 +36,7 @@ throwContextError e = do
   ctx <- askContextStack
   throwError (ContextError ctx e)
 
+-- | An error with context and span
 data ReportError c p e = ReportError
   { reContext :: !(ContextStack c)
   , reSpan :: !(Span p)
