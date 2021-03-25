@@ -1,10 +1,13 @@
 module SimpleParser.Bundle
   ( runBundledParserT
+  , runVoidParserT
   , runBundledParser
+  , runVoidParser
   ) where
 
 import Control.Monad.Identity (Identity (..))
 import Data.Sequence (Seq (..))
+import Data.Void (Void)
 import qualified ListT
 import SimpleParser.Parser (Parser, ParserT (..))
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
@@ -20,5 +23,14 @@ runBundledParserT parser = go Empty . runParserT parser where
           ParseSuccess a -> pure (Right (Just a))
           ParseError e -> go (es :|> e) nextListt
 
+runVoidParserT :: Monad m => ParserT Void s m a -> s -> m (Maybe a)
+runVoidParserT parser = fmap go . runBundledParserT parser where
+  go e = case e of
+    Left _ -> Nothing
+    Right ma -> ma
+
 runBundledParser :: Parser e s a -> s -> Either (Seq e) (Maybe a)
 runBundledParser parser = runIdentity . runBundledParserT parser
+
+runVoidParser :: Parser Void s a -> s -> Maybe a
+runVoidParser parser = runIdentity . runVoidParserT parser

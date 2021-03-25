@@ -11,13 +11,13 @@ import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
 import Data.Text (Text)
+import SimpleParser.Chunked (Chunked (..), packChunk)
 import SimpleParser.Common (betweenParser, decimalParser, escapedStringParser, lexemeParser, scientificParser,
                             sepByParser, signedParser, spaceParser)
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
 import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
-import SimpleParser.Stream (Chunked (..), TextualStream, packChunk)
+import SimpleParser.Stream (TextualStream)
 
 data Atom =
     AtomIdent !Text
@@ -90,4 +90,4 @@ atomP = lexP $ isolateParser $ andAllParser
   ]
 
 listP :: SexpParser s m => ParserT e s m a -> ParserT e s m (Seq a)
-listP root = lexP (fmap Seq.fromList (betweenParser openParenP closeParenP (sepByParser root spaceP)))
+listP root = lexP (betweenParser openParenP closeParenP (sepByParser root spaceP))

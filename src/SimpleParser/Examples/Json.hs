@@ -10,16 +10,18 @@ module SimpleParser.Examples.Json
 
 import Control.Monad (void)
 import Data.Scientific (Scientific)
+import Data.Sequence (Seq)
 import Data.Text (Text)
+import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
                             spaceParser)
 import SimpleParser.Input (matchChunk, matchToken)
 import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
-import SimpleParser.Stream (Stream (..), TextualChunked (..), TextualStream)
+import SimpleParser.Stream (Stream (..), TextualStream)
 
 data JsonF a =
-    JsonObject ![(Text, a)]
-  | JsonArray ![a]
+    JsonObject !(Seq (Text, a))
+  | JsonArray !(Seq a)
   | JsonString !Text
   | JsonBool !Bool
   | JsonNum !Scientific
@@ -74,17 +76,17 @@ falseTokP = chunkL "false"
 rawStringP :: JsonParser s m => ParserT e s m Text
 rawStringP = fmap packChunk (escapedStringParser '"')
 
-stringP:: JsonParser s m => ParserT e s m (JsonF a)
-stringP= fmap JsonString rawStringP
+stringP :: JsonParser s m => ParserT e s m (JsonF a)
+stringP = fmap JsonString rawStringP
 
-nullP:: JsonParser s m => ParserT e s m (JsonF a)
+nullP :: JsonParser s m => ParserT e s m (JsonF a)
 nullP = JsonNull <$ nullTokP
 
-boolP:: JsonParser s m => ParserT e s m (JsonF a)
-boolP= isolateParser (andAllParser [JsonBool True <$ trueTokP, JsonBool False <$ falseTokP])
+boolP :: JsonParser s m => ParserT e s m (JsonF a)
+boolP = isolateParser (andAllParser [JsonBool True <$ trueTokP, JsonBool False <$ falseTokP])
 
-numP:: JsonParser s m => ParserT e s m (JsonF a)
-numP= fmap JsonNum scientificParser
+numP :: JsonParser s m => ParserT e s m (JsonF a)
+numP = fmap JsonNum scientificParser
 
 objectPairP :: JsonParser s m => ParserT e s m a -> ParserT e s m (Text, a)
 objectPairP root = do
@@ -96,5 +98,5 @@ objectPairP root = do
 objectP :: JsonParser s m => ParserT e s m (Text, a) -> ParserT e s m (JsonF a)
 objectP pairP = betweenParser openBraceP closeBraceP (fmap JsonObject (sepByParser pairP commaP))
 
-arrayP:: JsonParser s m => ParserT e s m a -> ParserT e s m (JsonF a)
+arrayP :: JsonParser s m => ParserT e s m a -> ParserT e s m (JsonF a)
 arrayP root = betweenParser openBracketP closeBracketP (fmap JsonArray (sepByParser root commaP))

@@ -37,6 +37,7 @@ import Data.Foldable (toList)
 import Data.Void (Void)
 import ListT (ListT (..))
 import qualified ListT
+import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Result (ParseResult (..), ParseValue (..))
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
@@ -252,14 +253,14 @@ silenceParser parser = ParserT (ListT . go . runParserT parser) where
           ParseSuccess _ -> pure (Just (r, ListT nextListt))
 
 -- | Yields the LONGEST string of 0 or more successes of the given parser (and passes through failures).
-greedyStarParser :: Monad m => ParserT e s m a -> ParserT e s m [a]
+greedyStarParser :: (Chunked seq elem, Monad m) => ParserT e s m elem -> ParserT e s m seq
 greedyStarParser parser = go [] where
   opt = optionalParser parser
   go !acc = do
     res <- opt
     case res of
-      Nothing -> pure (reverse acc)
-      Just a -> go (a:acc)
+      Nothing -> pure (revTokensToChunk acc)
+      Just a -> go (consChunk a acc)
 
 -- | Same as 'greedyStarParser' but discards the result.
 greedyStarParser_ :: Monad m => ParserT e s m a -> ParserT e s m ()
@@ -272,8 +273,8 @@ greedyStarParser_ parser = go where
       Just _ -> go
 
 -- | Yields the LONGEST string of 1 or more successes of the given parser (and passes through failures).
-greedyPlusParser :: Monad m => ParserT e s m a -> ParserT e s m [a]
-greedyPlusParser parser = liftA2 (:) parser (greedyStarParser parser)
+greedyPlusParser :: (Chunked seq elem, Monad m) => ParserT e s m elem -> ParserT e s m seq
+greedyPlusParser parser = liftA2 consChunk parser (greedyStarParser parser)
 
 -- | Same as 'greedyPlusParser' but discards the result.
 greedyPlusParser_ :: Monad m => ParserT e s m a -> ParserT e s m ()

@@ -24,25 +24,26 @@ import Data.Char (digitToInt, isDigit, isSpace)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
+import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, satisfyToken,
                            takeTokensWhile1)
 import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser)
-import SimpleParser.Stream (Chunked (..), Span (..), Stream (..), StreamWithPos (..))
+import SimpleParser.Stream (Span (..), Stream (..), StreamWithPos (..))
 
 -- | Yields the maximal list of separated items. May return an empty list.
-sepByParser :: Monad m =>
+sepByParser :: (Chunked seq elem, Monad m) =>
   -- | How to parse item
-  ParserT e s m a ->
+  ParserT e s m elem ->
   -- | How to parse separator
   ParserT e s m () ->
-  ParserT e s m [a]
+  ParserT e s m seq
 sepByParser thing sep = do
   ma <- optionalParser thing
   case ma of
-    Nothing -> pure []
+    Nothing -> pure mempty
     Just a -> do
       as <- greedyStarParser (sep *> thing)
-      pure (a : as)
+      pure (consChunk a as)
 
 -- | Parses between start and end markers.
 betweenParser :: Monad m =>

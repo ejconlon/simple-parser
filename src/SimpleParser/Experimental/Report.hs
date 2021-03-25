@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module SimpleParser.Report
+module SimpleParser.Experimental.Report
   ( ReportError (..)
   , ParserWithReport
   , ContextError (..)
@@ -9,9 +9,9 @@ module SimpleParser.Report
 
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader (asks)
-import SimpleParser.Assert (EmbedStreamAssertError (..), EnrichStreamAssertError (..), MatchStreamAssertError (..))
 import SimpleParser.Common (getStreamPos)
-import SimpleParser.Context (ContextStack, HasContextStack (..), MonadContext, askContextStack)
+import SimpleParser.Experimental.Assert (EmbedStreamAssertError (..), EnrichStreamAssertError (..), MatchStreamAssertError (..))
+import SimpleParser.Experimental.Context (ContextStack, HasContextStack (..), MonadContext, askContextStack)
 import SimpleParser.Parser (ParserT, mapErrorStateParser)
 import SimpleParser.Stream (Span (..), StreamWithPos (..))
 

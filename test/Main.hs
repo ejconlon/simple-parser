@@ -7,6 +7,7 @@ import Control.Applicative (empty)
 import Control.Monad.Except (catchError, throwError)
 import Data.Foldable (asum)
 import Data.Functor (($>))
+import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser
@@ -165,7 +166,7 @@ test_match_chunk =
 
 test_greedy_star :: [TestTree]
 test_greedy_star =
-  let parser = greedyStarParser (matchToken 'h')
+  let parser = greedyStarParser (matchToken 'h') :: TestParser String
       cases =
         [ ("empty", InputOutput "" [parseSuccessResult "" (OffsetStream 0 "")])
         , ("non-empty", InputOutput "hi" [parseSuccessResult "h" (OffsetStream 1 "i")])
@@ -189,7 +190,7 @@ test_greedy_star_unit =
 
 test_greedy_plus :: [TestTree]
 test_greedy_plus =
-  let parser = greedyPlusParser (matchToken 'h')
+  let parser = greedyPlusParser (matchToken 'h') :: TestParser String
       cases =
         [ ("empty", InputOutput "" [])
         , ("non-empty", InputOutput "hi" [parseSuccessResult "h" (OffsetStream 1 "i")])
@@ -594,54 +595,52 @@ test_drop_while_1 =
         ]
   in testParserTrees parser cases
 
-testJsonCase :: TestName -> Text -> [Json] -> TestTree
+testJsonCase :: TestName -> Text -> Maybe Json -> TestTree
 testJsonCase name str expected = testCase ("json " <> name) $ do
   let actual = parseJson str
   actual @?= expected
 
-testJsonTrees :: [(TestName, Text, [Json])] -> [TestTree]
+testJsonTrees :: [(TestName, Text, Maybe Json)] -> [TestTree]
 testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
 
-parseJson :: Text -> [Json]
-parseJson str = do
+parseJson :: Text -> Maybe Json
+parseJson str =
   let p = jsonParser <* matchEnd :: Parser Void Text Json
-  ParseResult v _ <- runParser p str
-  case v of
-    ParseSuccess a -> pure a
+  in runVoidParser p str
 
 test_json :: [TestTree]
 test_json =
   let nullVal = Json JsonNull
       trueVal = Json (JsonBool True)
       falseVal = Json (JsonBool False)
-      arrVal = Json . JsonArray
+      arrVal = Json . JsonArray . Seq.fromList
       strVal = Json . JsonString
-      objVal = Json . JsonObject
+      objVal = Json . JsonObject . Seq.fromList
       numVal = Json . JsonNum
       cases =
-        [ ("empty", "", [])
-        , ("bad", "bad", [])
-        , ("null", "null", [nullVal])
-        , ("true", "true", [trueVal])
-        , ("false", "false", [falseVal])
-        , ("arr0", "[]", [arrVal []])
-        , ("arr1", "[null]", [arrVal [nullVal]])
-        , ("arr2", "[null, false]", [arrVal [nullVal, falseVal]])
-        , ("arr3", "[null, false, true]", [arrVal [nullVal, falseVal, trueVal]])
-        , ("arrx", "[null,]", [])
-        , ("str0", "\"\"", [strVal ""])
-        , ("str1", "\"x\"", [strVal "x"])
-        , ("str2", "\"xy\"", [strVal "xy"])
-        , ("str3", "\"xyz\"", [strVal "xyz"])
-        , ("str4", "\"xy\\\"z\"", [strVal "xy\"z"])
-        , ("obj0", "{}", [objVal []])
-        , ("obj1", "{\"x\": true}", [objVal [("x", trueVal)]])
-        , ("obj2", "{\"x\": true, \"y\": false}", [objVal [("x", trueVal), ("y", falseVal)]])
-        , ("num0", "0", [numVal (read "0")])
-        , ("num1", "123", [numVal (read "123")])
-        , ("num2", "123.45", [numVal (read "123.45")])
-        , ("num3", "1e100", [numVal (read "1e100")])
-        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", [objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]])
+        [ ("empty", "", Nothing)
+        , ("bad", "bad", Nothing)
+        , ("null", "null", Just nullVal)
+        , ("true", "true", Just trueVal)
+        , ("false", "false", Just falseVal)
+        , ("arr0", "[]", Just (arrVal []))
+        , ("arr1", "[null]", Just (arrVal [nullVal]))
+        , ("arr2", "[null, false]", Just (arrVal [nullVal, falseVal]))
+        , ("arr3", "[null, false, true]", Just (arrVal [nullVal, falseVal, trueVal]))
+        , ("arrx", "[null,]", Nothing)
+        , ("str0", "\"\"", Just (strVal ""))
+        , ("str1", "\"x\"", Just (strVal "x"))
+        , ("str2", "\"xy\"", Just (strVal "xy"))
+        , ("str3", "\"xyz\"", Just (strVal "xyz"))
+        , ("str4", "\"xy\\\"z\"", Just (strVal "xy\"z"))
+        , ("obj0", "{}", Just (objVal []))
+        , ("obj1", "{\"x\": true}", Just (objVal [("x", trueVal)]))
+        , ("obj2", "{\"x\": true, \"y\": false}", Just (objVal [("x", trueVal), ("y", falseVal)]))
+        , ("num0", "0", Just (numVal (read "0")))
+        , ("num1", "123", Just (numVal (read "123")))
+        , ("num2", "123.45", Just (numVal (read "123.45")))
+        , ("num3", "1e100", Just (numVal (read "1e100")))
+        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", Just (objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]))
         ]
   in testJsonTrees cases
 

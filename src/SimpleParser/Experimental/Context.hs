@@ -1,4 +1,4 @@
-module SimpleParser.Context
+module SimpleParser.Experimental.Context
   ( ContextStack (..)
   , pushContext
   , HasContextStack (..)

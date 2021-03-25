@@ -23,8 +23,9 @@ import Control.Applicative (empty)
 import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
+import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Parser (ParserT)
-import SimpleParser.Stream (Chunked (..), Stream (..))
+import SimpleParser.Stream (Stream (..))
 
 -- | Return the next token, if any, but don't consume it.
 peekToken :: (Stream s, Monad m) => ParserT e s m (Maybe (Token s))

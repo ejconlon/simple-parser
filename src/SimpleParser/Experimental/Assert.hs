@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module SimpleParser.Assert
+module SimpleParser.Experimental.Assert
   ( AssertError (..)
   , StreamAssertError (..)
   , MatchStreamAssertError (..)
@@ -22,9 +22,10 @@ module SimpleParser.Assert
 import Control.Monad ((>=>))
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Trans (lift)
+import SimpleParser.Chunked (chunkLength)
 import SimpleParser.Input (anyChunk, anyToken, dropTokensWhile1, peekToken, popChunk, popToken, takeTokensWhile1)
 import SimpleParser.Parser (ParserT, orParser)
-import SimpleParser.Stream (Stream (..), chunkLength)
+import SimpleParser.Stream (Stream (..))
 
 -- | Failed assertions about common input functions
 data AssertError chunk token =
