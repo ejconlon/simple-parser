@@ -1,3 +1,6 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 module SimpleParser.Result
   ( StreamError (..)
   , CompoundError (..)
@@ -11,22 +14,46 @@ module SimpleParser.Result
   ) where
 
 import SimpleParser.Labels (LabelledError)
+import SimpleParser.Stream (Stream (..))
 
-data StreamError s = StreamErrorTodo
+data RawStreamError label chunk token =
+    RawErrorMatchEnd !token
+  | RawErrorAnyToken
+  | RawErrorAnyChunk
+  | RawErrorSatisfyToken !(Maybe label) !(Maybe token)
+  | RawErrorMatchToken !token !(Maybe token)
+  | RawErrorMatchChunk !chunk !(Maybe chunk)
+  | RawErrorTakeTokensWhile1 !label !(Maybe token)
+  | RawErrorDropTokensWhile1 !label !(Maybe token)
   deriving (Eq, Show)
 
-data CompoundError s e =
-    CompoundErrorStream !(StreamError s)
+-- | 'RawStreamError' specialized to 'Stream' types - newtyped to allow GHC
+-- to derive eq/show in the absense of type families.
+newtype StreamError l s = StreamError
+  { unStreamError :: RawStreamError l (Chunk s) (Token s)
+  }
+
+deriving instance (Eq l, Eq (Token s), Eq (Chunk s)) => Eq (StreamError l s)
+deriving instance (Show l, Show (Token s), Show (Chunk s)) => Show (StreamError l s)
+
+data CompoundError l s e =
+    CompoundErrorStream !(StreamError l s)
   | CompoundErrorCustom !e
-  deriving (Eq, Show)
+  deriving (Functor, Foldable, Traversable)
 
-type ParseError l s e = LabelledError l (CompoundError s e)
+deriving instance (Eq l, Eq (Token s), Eq (Chunk s), Eq e) => Eq (CompoundError l s e)
+deriving instance (Show l, Show (Token s), Show (Chunk s), Show e) => Show (CompoundError l s e)
+
+type ParseError l s e = LabelledError l (CompoundError l s e)
 
 -- | Strict 'Either' for parse results.
 data ParseValue l s e a =
     ParseValueError !(ParseError l s e)
   | ParseValueSuccess !a
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+  deriving (Functor, Foldable, Traversable)
+
+deriving instance (Eq l, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseValue l s e a)
+deriving instance (Show l, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseValue l s e a)
 
 onParseValue :: (ParseError l s e -> z) -> (a -> z) -> ParseValue l s e a -> z
 onParseValue onError onSuccess value =
@@ -38,7 +65,10 @@ onParseValue onError onSuccess value =
 data ParseResult l s e a = ParseResult
   { prState :: !s
   , prValue :: !(ParseValue l s e a)
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
+  } deriving (Functor, Foldable, Traversable)
+
+deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseResult l s e a)
+deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseResult l s e a)
 
 mkParseSuccessResult :: s -> a -> ParseResult l s e a
 mkParseSuccessResult st = ParseResult st . ParseValueSuccess
