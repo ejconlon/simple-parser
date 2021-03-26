@@ -1,38 +1,53 @@
 module SimpleParser.Result
-  ( ParseResult (..)
+  ( StreamError (..)
+  , CompoundError (..)
+  , ParseError
+  , ParseResult (..)
   , ParseValue (..)
-  , parseSuccessResult
-  , parseErrorResult
-  , parseValue
-  , parseResult
+  , onParseValue
+  , mkParseSuccessResult
+  , mkParseErrorResult
+  , onParseResult
   ) where
 
+import SimpleParser.Labels (LabelledError)
+
+data StreamError s = StreamErrorTodo
+  deriving (Eq, Show)
+
+data CompoundError s e =
+    CompoundErrorStream !(StreamError s)
+  | CompoundErrorCustom !e
+  deriving (Eq, Show)
+
+type ParseError l s e = LabelledError l (CompoundError s e)
+
 -- | Strict 'Either' for parse results.
-data ParseValue e a =
-    ParseError !e
-  | ParseSuccess !a
+data ParseValue l s e a =
+    ParseValueError !(ParseError l s e)
+  | ParseValueSuccess !a
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-parseValue :: (e -> z) -> (a -> z) -> ParseValue e a -> z
-parseValue onError onSuccess value =
+onParseValue :: (ParseError l s e -> z) -> (a -> z) -> ParseValue l s e a -> z
+onParseValue onError onSuccess value =
   case value of
-    ParseError e -> onError e
-    ParseSuccess a -> onSuccess a
+    ParseValueError e -> onError e
+    ParseValueSuccess a -> onSuccess a
 
 -- | Strict pair of parse result and state at the time it was yielded.
-data ParseResult s e a = ParseResult
+data ParseResult l s e a = ParseResult
   { prState :: !s
-  , prValue :: !(ParseValue e a)
+  , prValue :: !(ParseValue l s e a)
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
-parseSuccessResult :: s -> a -> ParseResult s e a
-parseSuccessResult st = ParseResult st . ParseSuccess
+mkParseSuccessResult :: s -> a -> ParseResult l s e a
+mkParseSuccessResult st = ParseResult st . ParseValueSuccess
 
-parseErrorResult :: s -> e -> ParseResult s e a
-parseErrorResult st = ParseResult st . ParseError
+mkParseErrorResult :: s -> ParseError l s e -> ParseResult l s e a
+mkParseErrorResult st = ParseResult st . ParseValueError
 
-parseResult :: (s -> e -> z) -> (s -> a -> z) -> ParseResult s e a -> z
-parseResult onError onSuccess (ParseResult st value) =
+onParseResult :: (s -> ParseError l s e -> z) -> (s -> a -> z) -> ParseResult l s e a -> z
+onParseResult onError onSuccess (ParseResult st value) =
   case value of
-    ParseError e -> onError st e
-    ParseSuccess a -> onSuccess st a
+    ParseValueError e -> onError st e
+    ParseValueSuccess a -> onSuccess st a

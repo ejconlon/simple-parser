@@ -3,17 +3,15 @@ module SimpleParser.Parser
   ( ParserT (..)
   , Parser
   , runParser
+  , catchJustParser
   , filterParser
-  , valueParser
   , reflectParser
-  , unreflectParser
   , andParser
   , andAllParser
   , orParser
   , orAllParser
   , suppressParser
   , isolateParser
-  , defaultValueParser
   , defaultSuccessParser
   , defaultErrorParser
   , optionalParser
@@ -41,107 +39,110 @@ import Data.Void (Void)
 import ListT (ListT (..))
 import qualified ListT
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Result (ParseResult (..), ParseValue (..))
+import SimpleParser.Labels (LabelStack (..), LabelledError (..))
+import SimpleParser.Result (CompoundError (..), ParseResult (..), ParseValue (..))
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
 -- All MTL instances are for this transformer only. If, for example, your effect
 -- has its own 'MonadState' instance, you'll have to use 'lift get' instead of 'get'.
-newtype ParserT r s e m a = ParserT { runParserT :: r -> s -> ListT m (ParseResult s e a) }
+newtype ParserT l s e m a = ParserT { runParserT :: LabelStack l -> s -> ListT m (ParseResult l s e a) }
   deriving (Functor)
 
 -- | Use 'Parser' if you have no need for other monadic effects.
-type Parser r s e a = ParserT r s e Identity a
+type Parser l s e a = ParserT l s e Identity a
 
-instance Monad m => Applicative (ParserT r s e m) where
-  pure a = ParserT (\_ s -> pure (ParseResult s (ParseSuccess a)))
+instance Monad m => Applicative (ParserT l s e m) where
+  pure a = ParserT (\_ s -> pure (ParseResult s (ParseValueSuccess a)))
   (<*>) = ap
 
-instance Monad m => Monad (ParserT r s e m) where
+instance Monad m => Monad (ParserT l s e m) where
   return = pure
-  parser >>= f = ParserT (\r s -> runParserT parser r s >>= go r) where
-    go r (ParseResult t v) =
+  parser >>= f = ParserT (\ls s -> runParserT parser ls s >>= go ls) where
+    go ls (ParseResult t v) =
       case v of
-        ParseError e -> pure (ParseResult t (ParseError e))
-        ParseSuccess a -> runParserT (f a) r t
+        ParseValueError e -> pure (ParseResult t (ParseValueError e))
+        ParseValueSuccess a -> runParserT (f a) ls t
 
-instance Monad m => Alternative (ParserT r s e m) where
+instance Monad m => Alternative (ParserT l s e m) where
   empty = ParserT (\_ _ -> empty)
   (<|>) = andParser
 
-instance Monad m => MonadPlus (ParserT r s e m) where
+instance Monad m => MonadPlus (ParserT l s e m) where
   mzero = empty
   mplus = (<|>)
 
-instance Monad m => MonadReader r (ParserT r s e m) where
-  ask = ParserT (\r s -> pure (ParseResult s (ParseSuccess r)))
-  reader f = ParserT (\r s -> pure (ParseResult s (ParseSuccess (f r))))
+instance Monad m => MonadReader (LabelStack l) (ParserT l s e m) where
+  ask = ParserT (\ls s -> pure (ParseResult s (ParseValueSuccess ls)))
+  reader f = ParserT (\ls s -> pure (ParseResult s (ParseValueSuccess (f ls))))
   local f p = ParserT (runParserT p . f)
 
-instance Monad m => MonadState s (ParserT r s e m) where
-  get = ParserT (\_ s -> pure (ParseResult s (ParseSuccess s)))
-  put t = ParserT (\_ _ -> pure (ParseResult t (ParseSuccess ())))
-  state f = ParserT (\_ s -> let (!a, !t) = f s in pure (ParseResult t (ParseSuccess a)))
+instance Monad m => MonadState s (ParserT l s e m) where
+  get = ParserT (\_ s -> pure (ParseResult s (ParseValueSuccess s)))
+  put t = ParserT (\_ _ -> pure (ParseResult t (ParseValueSuccess ())))
+  state f = ParserT (\_ s -> let (!a, !t) = f s in pure (ParseResult t (ParseValueSuccess a)))
 
-instance Monad m => MonadError e (ParserT r s e m) where
-  throwError e = ParserT (\_ s -> pure (ParseResult s (ParseError e)))
-  catchError parser handler = ParserT (\r s -> runParserT parser r s >>= go r) where
-    go r (ParseResult t v) =
+instance Monad m => MonadError e (ParserT l s e m) where
+  throwError e = ParserT (\ls s -> pure (ParseResult s (ParseValueError (LabelledError ls (CompoundErrorCustom e)))))
+  catchError parser handler = ParserT (\ls s -> runParserT parser ls s >>= go ls) where
+    go ls res@(ParseResult t v) =
       case v of
-        ParseError e -> runParserT (handler e) r t
-        ParseSuccess a -> pure (ParseResult t (ParseSuccess a))
+        ParseValueError (LabelledError _ ce) ->
+          case ce of
+            CompoundErrorCustom e -> runParserT (handler e) ls t
+            _ -> pure res
+        ParseValueSuccess a -> pure (ParseResult t (ParseValueSuccess a))
 
-instance MonadTrans (ParserT r s e) where
-  lift ma = ParserT (\_ s -> lift (fmap (ParseResult s . ParseSuccess) ma))
+instance MonadTrans (ParserT l s e) where
+  lift ma = ParserT (\_ s -> lift (fmap (ParseResult s . ParseValueSuccess) ma))
 
-instance MFunctor (ParserT r s e) where
-  hoist trans (ParserT f) = ParserT (\r s -> hoist trans (f r s))
+instance MFunctor (ParserT l s e) where
+  hoist trans (ParserT f) = ParserT (\ls s -> hoist trans (f ls s))
 
 -- | Runs a non-effectful parser from an inital state and collects all results.
-runParser :: Parser r s e a -> r -> s -> [ParseResult s e a]
-runParser m r s = runIdentity (ListT.toList (runParserT m r s))
+runParser :: Parser l s e a -> LabelStack l -> s -> [ParseResult l s e a]
+runParser parser ls s = runIdentity (ListT.toList (runParserT parser ls s))
+
+-- | Catch only a subset of errors. This preserves label information vs rethrowing.
+catchJustParser :: Monad m => (e -> Maybe a) -> ParserT l s e m a -> ParserT l s e m a
+catchJustParser handler parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
+  go listt = do
+    m <- ListT.uncons listt
+    case m of
+      Nothing -> pure Nothing
+      Just (res@(ParseResult s v), rest) ->
+        let nextListt = ListT (go rest)
+        in case v of
+          ParseValueError (LabelledError _ (CompoundErrorCustom e) )->
+            case handler e of
+              Nothing -> pure (Just (res, nextListt))
+              Just a -> pure (Just (ParseResult s (ParseValueSuccess a), nextListt))
+          _ -> pure (Just (res, nextListt))
 
 -- | Filters parse results
-filterParser :: Monad m => (a -> Bool) -> ParserT r s e m a -> ParserT r s e m a
-filterParser f parser = ParserT (\r s -> ListT (go (runParserT parser r s))) where
+filterParser :: Monad m => (a -> Bool) -> ParserT l s e m a -> ParserT l s e m a
+filterParser f parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
   go listt = do
     m <- ListT.uncons listt
     case m of
       Nothing -> pure Nothing
       Just (r@(ParseResult _ v), rest) ->
         case v of
-          ParseSuccess a | not (f a) -> go rest
+          ParseValueSuccess a | not (f a) -> go rest
           _ -> pure (Just (r, ListT (go rest)))
 
--- | A kind of 'pure' or 'throwError' for 'ParseValue.
-valueParser :: Monad m => ParseValue e a -> ParserT r s e m a
-valueParser v = ParserT (\_ s -> pure (ParseResult s v))
-
 -- | A kind of 'catchError' that returns all results, success and failure.
-reflectParser :: Monad m => ParserT r s e m a -> ParserT r s e m (ParseValue e a)
-reflectParser parser = ParserT (\r s -> ListT (go (runParserT parser r s))) where
+reflectParser :: Monad m => ParserT l s e m a -> ParserT l s e m (ParseValue l s e a)
+reflectParser parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
   go listt = do
     m <- ListT.uncons listt
     case m of
       Nothing -> pure Nothing
       Just (ParseResult t v, rest) ->
-        pure (Just (ParseResult t (ParseSuccess v), ListT (go rest)))
-
--- | A kind of 'throwError' that is the inverse of 'reflectParser'.
-unreflectParser :: Monad m => ParserT r s e m (ParseValue e a) -> ParserT r s e m a
-unreflectParser parser = ParserT (\r s -> ListT (go (runParserT parser r s))) where
-  go listt = do
-    m <- ListT.uncons listt
-    case m of
-      Nothing -> pure Nothing
-      Just (ParseResult t v, rest) ->
-        let a = case v of
-              ParseError e -> ParseError e
-              ParseSuccess w -> w
-        in pure (Just (ParseResult t a, ListT (go rest)))
+        pure (Just (ParseResult t (ParseValueSuccess v), ListT (go rest)))
 
 -- -- | Combines the results of two parsers. Equivalent to '<|>'
-andParser :: Monad m => ParserT r s e m a -> ParserT r s e m a -> ParserT r s e m a
-andParser first second = ParserT (\r s -> ListT (go r s (runParserT first r s))) where
+andParser :: Monad m => ParserT l s e m a -> ParserT l s e m a -> ParserT l s e m a
+andParser first second = ParserT (\ls s -> ListT (go ls s (runParserT first ls s))) where
   go r s listt = do
     m <- ListT.uncons listt
     case m of
@@ -149,24 +150,24 @@ andParser first second = ParserT (\r s -> ListT (go r s (runParserT first r s)))
       Just (a, nextListt) -> pure (Just (a, ListT (go r s nextListt)))
 
 -- | Combines the results of all parsers. Equvalent to 'asum'.
-andAllParser :: (Foldable f, Monad m) => f (ParserT r s e m a) -> ParserT r s e m a
+andAllParser :: (Foldable f, Monad m) => f (ParserT l s e m a) -> ParserT l s e m a
 andAllParser = start . toList where
   start ps =
     case ps of
       [] -> empty
-      q:qs -> ParserT (\r s -> ListT (run r s qs (runParserT q r s)))
-  run r s qs listt = do
+      q:qs -> ParserT (\ls s -> ListT (run ls s qs (runParserT q ls s)))
+  run ls s qs listt = do
     m <- ListT.uncons listt
     case m of
       Nothing ->
         case qs of
           [] -> pure Nothing
-          x:xs -> run r s xs (runParserT x r s)
-      Just (a, nextListt) -> pure (Just (a, ListT (run r s qs nextListt)))
+          x:xs -> run ls s xs (runParserT x ls s)
+      Just (a, nextListt) -> pure (Just (a, ListT (run ls s qs nextListt)))
 
 -- | Yields results from the FIRST parser of the two that returns ANY results (success or failure).
-orParser :: Monad m => ParserT r s e m a -> ParserT r s e m a -> ParserT r s e m a
-orParser first second = ParserT (\r s -> ListT (go r s (runParserT first r s))) where
+orParser :: Monad m => ParserT l s e m a -> ParserT l s e m a -> ParserT l s e m a
+orParser first second = ParserT (\ls s -> ListT (go ls s (runParserT first ls s))) where
   go r s listt = do
     m <- ListT.uncons listt
     case m of
@@ -174,12 +175,12 @@ orParser first second = ParserT (\r s -> ListT (go r s (runParserT first r s))) 
       Just _ -> pure m
 
 -- | Yields results from the FIRST parser of the list that returns ANY results (success or failure).
-orAllParser :: (Monad m, Foldable f) => f (ParserT r s e m a) -> ParserT r s e m a
+orAllParser :: (Monad m, Foldable f) => f (ParserT l s e m a) -> ParserT l s e m a
 orAllParser = start . toList where
   start ps =
     case ps of
       [] -> empty
-      q:qs -> ParserT (\r s -> ListT (run r s qs (runParserT q r s)))
+      q:qs -> ParserT (\ls s -> ListT (run ls s qs (runParserT q ls s)))
   run r s qs listt = do
     m <- ListT.uncons listt
     case m of
@@ -189,16 +190,16 @@ orAllParser = start . toList where
           x:xs -> run r s xs (runParserT x r s)
       Just _ -> pure m
 
-gatherParser :: Monad m => Bool -> ParserT r s e m a -> ParserT r s e m a
-gatherParser single parser = ParserT (\r s -> ListT (go [] (runParserT parser r s))) where
+gatherParser :: Monad m => Bool -> ParserT l s e m a -> ParserT l s e m a
+gatherParser single parser = ParserT (\ls s -> ListT (go [] (runParserT parser ls s))) where
   go !racc listt = do
     m <- ListT.uncons listt
     case m of
       Nothing -> returnErr (reverse racc)
       Just (res@(ParseResult _ v), rest) ->
         case v of
-          ParseError _ -> go (res:racc) rest
-          ParseSuccess _ ->
+          ParseValueError _ -> go (res:racc) rest
+          ParseValueSuccess _ ->
             let nextListt = if single then empty else ListT (filterOk rest)
             in pure (Just (res, nextListt))
 
@@ -214,46 +215,49 @@ gatherParser single parser = ParserT (\r s -> ListT (go [] (runParserT parser r 
       Just (res@(ParseResult _ v), rest) ->
         let nextListt = filterOk rest
         in case v of
-          ParseError _ -> nextListt
-          ParseSuccess _ -> pure (Just (res, ListT nextListt))
+          ParseValueError _ -> nextListt
+          ParseValueSuccess _ -> pure (Just (res, ListT nextListt))
 
 -- | If the parse results in ANY successes, keep only those. Otherwise return all failures.
 -- This may block indefinitely as it awaits either the end of the parser or its first success.
 -- See 'isolateParser' if you want only one success.
-suppressParser :: Monad m => ParserT r s e m a -> ParserT r s e m a
+suppressParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
 suppressParser = gatherParser False
 
 -- | If the parse results in ANY successes, keep only THE FIRST. Otherwise return all failures.
 -- This may block indefinitely as it awaits either the end of the parser or its first success.
 -- See 'suppressParser' if you want all successes.
-isolateParser :: Monad m => ParserT r s e m a -> ParserT r s e m a
+isolateParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
 isolateParser = gatherParser True
 
-defaultValueParser :: Monad m => ParseValue e a -> ParserT r s e m a -> ParserT r s e m a
-defaultValueParser val parser = ParserT (\r s -> ListT (go s (runParserT parser r s))) where
+-- | If the parser yields no results (success or failure), yield a given value.
+defaultSuccessParser :: Monad m => a -> ParserT l s e m a -> ParserT l s e m a
+defaultSuccessParser val parser = ParserT (\ls s -> ListT (go s (runParserT parser ls s))) where
   go s listt = do
     m <- ListT.uncons listt
     case m of
-      Nothing -> pure (Just (ParseResult s val, empty))
+      Nothing -> pure (Just (ParseResult s (ParseValueSuccess val), empty))
       Just _ -> pure m
 
--- | If the parser yields no results (success or failure), yield a given value.
-defaultSuccessParser :: Monad m => a -> ParserT r s e m a -> ParserT r s e m a
-defaultSuccessParser = defaultValueParser . ParseSuccess
-
 -- | If the parser yields no results (success or failure), throw the given error.
-defaultErrorParser :: Monad m => e -> ParserT r s e m a -> ParserT r s e m a
-defaultErrorParser = defaultValueParser . ParseError
+defaultErrorParser :: Monad m => e -> ParserT l s e m a -> ParserT l s e m a
+defaultErrorParser e parser = ParserT (\ls s -> ListT (go ls s (runParserT parser ls s))) where
+  go ls s listt = do
+    m <- ListT.uncons listt
+    case m of
+      Nothing -> pure (Just (ParseResult s (ParseValueError (LabelledError ls (CompoundErrorCustom e))), empty))
+      Just _ -> pure m
 
 -- | A parser that yields 'Nothing' if there are no results (success or failure),
 -- otherwise wrapping successes in 'Just'.
-optionalParser :: Monad m => ParserT r s e m a -> ParserT r s e m (Maybe a)
+optionalParser :: Monad m => ParserT l s e m a -> ParserT l s e m (Maybe a)
 optionalParser parser = defaultSuccessParser Nothing (fmap Just parser)
 
--- | Removes all failures from the parse results.
--- Equivalent to 'catchError (const empty)'.
-silenceParser :: Monad m => ParserT r s e m a -> ParserT r s e m a
-silenceParser parser = ParserT (\r s -> ListT (go (runParserT parser r s))) where
+-- | Removes all failures from the parse results. Catches more errors than 'catchError (const empty)'
+-- because this includes stream errors, not just custom errors.
+-- If you want more fine-grained control, use 'reflectParser' and map over the results.
+silenceParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
+silenceParser parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
   go listt = do
     m <- ListT.uncons listt
     case m of
@@ -261,11 +265,11 @@ silenceParser parser = ParserT (\r s -> ListT (go (runParserT parser r s))) wher
       Just (res@(ParseResult _ v), rest) ->
         let nextListt = go rest
         in case v of
-          ParseError _ -> nextListt
-          ParseSuccess _ -> pure (Just (res, ListT nextListt))
+          ParseValueError _ -> nextListt
+          ParseValueSuccess _ -> pure (Just (res, ListT nextListt))
 
 -- | Yields the LONGEST string of 0 or more successes of the given parser (and passes through failures).
-greedyStarParser :: (Chunked seq elem, Monad m) => ParserT r s e m elem -> ParserT r s e m seq
+greedyStarParser :: (Chunked seq elem, Monad m) => ParserT l s e m elem -> ParserT l s e m seq
 greedyStarParser parser = go [] where
   opt = optionalParser parser
   go !acc = do
@@ -275,7 +279,7 @@ greedyStarParser parser = go [] where
       Just a -> go (consChunk a acc)
 
 -- | Same as 'greedyStarParser' but discards the result.
-greedyStarParser_ :: Monad m => ParserT r s e m a -> ParserT r s e m ()
+greedyStarParser_ :: Monad m => ParserT l s e m a -> ParserT l s e m ()
 greedyStarParser_ parser = go where
   opt = optionalParser parser
   go = do
@@ -285,45 +289,48 @@ greedyStarParser_ parser = go where
       Just _ -> go
 
 -- | Yields the LONGEST string of 1 or more successes of the given parser (and passes through failures).
-greedyPlusParser :: (Chunked seq elem, Monad m) => ParserT r s e m elem -> ParserT r s e m seq
+greedyPlusParser :: (Chunked seq elem, Monad m) => ParserT l s e m elem -> ParserT l s e m seq
 greedyPlusParser parser = liftA2 consChunk parser (greedyStarParser parser)
 
 -- | Same as 'greedyPlusParser' but discards the result.
-greedyPlusParser_ :: Monad m => ParserT r s e m a -> ParserT r s e m ()
+greedyPlusParser_ :: Monad m => ParserT l s e m a -> ParserT l s e m ()
 greedyPlusParser_ parser = parser *> greedyStarParser_ parser
 
 -- | Yield the results of the given parser, but rewind back to the starting state.
 -- Note that these results may contain errors, so you may want to stifle them with 'silenceParser', for example.
-lookAheadParser :: Monad m => ParserT r s e m a -> ParserT r s e m a
-lookAheadParser parser = do
-  s <- get
-  flip catchError (\e -> put s *> throwError e) $ do
-    v <- parser
-    put s
-    pure v
+lookAheadParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
+lookAheadParser parser = ParserT (\ls s -> ListT (go s (runParserT parser ls s))) where
+  go s listt = do
+    m <- ListT.uncons listt
+    case m of
+      Nothing -> pure Nothing
+      Just (ParseResult _ v, rest) -> pure (Just (ParseResult s v, ListT (go s rest)))
 
 -- | Traverse the error and thrown state to change the error type of the parser.
-traverseErrorParser :: Monad m => (s -> e -> m d) -> ParserT r s e m a -> ParserT r s d m a
-traverseErrorParser f p = ParserT (\r s -> ListT (go (runParserT p r s))) where
+traverseErrorParser :: Monad m => (s -> e -> m d) -> ParserT l s e m a -> ParserT l s d m a
+traverseErrorParser f parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
   go listt = do
     m <- ListT.uncons listt
     case m of
       Nothing -> pure Nothing
-      Just (ParseResult t v, nextListt) -> do
+      Just (ParseResult t v, rest) -> do
         w <- case v of
-          ParseError e -> fmap ParseError (f t e)
-          ParseSuccess a -> pure (ParseSuccess a)
-        pure (Just (ParseResult t w, ListT (go nextListt)))
+          ParseValueError (LabelledError ls ce) ->
+            case ce of
+              CompoundErrorStream se -> pure (ParseValueError (LabelledError ls (CompoundErrorStream se)))
+              CompoundErrorCustom e -> fmap (ParseValueError . LabelledError ls . CompoundErrorCustom) (f t e)
+          ParseValueSuccess a -> pure (ParseValueSuccess a)
+        pure (Just (ParseResult t w, ListT (go rest)))
 
 -- | Map over the error and thrown state to change the error type of the parser.
-mapErrorParser :: Monad m => (s -> e -> d) -> ParserT r s e m a -> ParserT r s d m a
+mapErrorParser :: Monad m => (s -> e -> d) -> ParserT l s e m a -> ParserT l s d m a
 mapErrorParser f = traverseErrorParser (\e s -> pure (f e s))
 
 -- | Drop all errors from the parse results. Unlike 'silenceParser', this
 -- changes the error type of the parser so that no further errors can be thrown.
-voidErrorParser :: Monad m => ParserT r s e m a -> ParserT r s Void m a
-voidErrorParser p = ParserT (\r s -> runParserT p r s >>= go) where
+voidErrorParser :: Monad m => ParserT l s e m a -> ParserT l s Void m a
+voidErrorParser parser = ParserT (\ls s -> runParserT parser ls s >>= go) where
   go (ParseResult t v) =
     case v of
-      ParseError _ -> empty
-      ParseSuccess a -> pure (ParseResult t (ParseSuccess a))
+      ParseValueError _ -> empty
+      ParseValueSuccess a -> pure (ParseResult t (ParseValueSuccess a))

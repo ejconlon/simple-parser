@@ -8,6 +8,7 @@ module SimpleParser
   , module SimpleParser.Chunked
   , module SimpleParser.Common
   , module SimpleParser.Input
+  , module SimpleParser.Labels
   , module SimpleParser.Parser
   , module SimpleParser.Result
   , module SimpleParser.Stream
@@ -17,6 +18,7 @@ import SimpleParser.Bundle
 import SimpleParser.Chunked
 import SimpleParser.Common
 import SimpleParser.Input
+import SimpleParser.Labels
 import SimpleParser.Parser
 import SimpleParser.Result
 import SimpleParser.Stream
