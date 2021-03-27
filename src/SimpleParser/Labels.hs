@@ -5,17 +5,10 @@ module SimpleParser.Labels
   , HasLabelStack (..)
   , localPushLabel
   , askLabelStack
-  , LabelledError (..)
-  , mkLabelledError
-  , mkUnlabelledError
-  , StreamLabel (..)
-  , CompoundLabel (..)
   ) where
 
 import Control.Monad.Reader (MonadReader (..), asks)
-import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
-import qualified Data.Sequence as Seq
 
 -- | Stack of labels representing labels in the parse tree.
 -- Behind the newtype, a "push" onto the stack is implemented as "snoc", therefore
@@ -51,35 +44,3 @@ localPushLabel = local . overLabelStack . pushLabel
 -- | Reads a 'LabelStack'
 askLabelStack :: (HasLabelStack l r, MonadReader r m) => m (LabelStack l)
 askLabelStack = asks viewLabelStack
-
--- | A labelled error
-data LabelledError l e = LabelledError
-  { leLabels :: !(LabelStack l)
-  , leError :: !e
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
-
-instance HasLabelStack l (LabelledError l e) where
-  viewLabelStack = leLabels
-  setLabelStack ls le = le { leLabels = ls }
-
--- | Easy constructor for labelled errors
-mkLabelledError :: Foldable f => f l -> e -> LabelledError l e
-mkLabelledError = LabelledError . LabelStack . Seq.fromList . toList
-
--- | Easy constructor for unlabelled errors
-mkUnlabelledError :: e -> LabelledError l e
-mkUnlabelledError = LabelledError emptyLabelStack
-
--- | Enumeration of common labels in textual parsing.
--- This may expand as the stdlib expands or byte parsing is added.
-data StreamLabel =
-    StreamLabelSpace
-  | StreamLabelHSpace
-  | StreamLabelDigit
-  deriving (Eq, Show)
-
--- | Union of common and custom labels
-data CompoundLabel l =
-    CompoundLabelStream !StreamLabel
-  | CompoundLabelCustom !l
-  deriving (Eq, Show, Functor, Foldable, Traversable)

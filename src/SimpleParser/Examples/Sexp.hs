@@ -15,10 +15,9 @@ import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import SimpleParser.Chunked (Chunked (..), packChunk)
-import SimpleParser.Common (betweenParser, decimalParser, escapedStringParser, exclusiveParser, lexemeParser,
-                            scientificParser, sepByParser, signedParser, spaceParser)
+import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, decimalParser, escapedStringParser,
+                            exclusiveParser, lexemeParser, scientificParser, sepByParser, signedParser, spaceParser)
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Labels (CompoundLabel (..))
 import SimpleParser.Parser (ParserT)
 import SimpleParser.Stream (TextualStream)
 
@@ -37,7 +36,11 @@ data SexpF a =
 data SexpLabel =
     SexpLabelBranch !Text
   | SexpLabelIdentStart
+  | SexpLabelEmbedText !TextLabel
   deriving (Eq, Show)
+
+instance EmbedTextLabel SexpLabel where
+  embedTextLabel = SexpLabelEmbedText
 
 newtype Sexp = Sexp { unSexp :: SexpF Sexp }
   deriving (Eq, Show)
@@ -67,7 +70,7 @@ stringP = fmap packChunk (escapedStringParser '"')
 
 identifierP :: SexpParser l s m => ParserT l s e m Text
 identifierP = do
-  x <- satisfyToken (Just (CompoundLabelCustom SexpLabelIdentStart)) identStartPred
+  x <- satisfyToken (Just SexpLabelIdentStart) identStartPred
   xs <- takeTokensWhile identContPred
   pure (packChunk (consChunk x xs))
 

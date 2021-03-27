@@ -27,6 +27,7 @@ module SimpleParser.Parser
   , mapErrorParser
   , traverseErrorParser
   , labelParser
+  , fastForwardParser
   ) where
 
 import Control.Applicative (Alternative (..), liftA2)
@@ -43,8 +44,8 @@ import Data.Sequence (Seq (..))
 import ListT (ListT (..))
 import qualified ListT
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Labels (LabelStack (..), LabelledError (..), localPushLabel)
-import SimpleParser.Result (CompoundError (..), ParseResult (..), ParseValue (..))
+import SimpleParser.Labels (LabelStack (..), localPushLabel)
+import SimpleParser.Result (CompoundError (..), ParseError (..), ParseResult (..), ParseValue (..))
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
 -- All MTL instances are for this transformer only. If, for example, your effect
@@ -86,11 +87,11 @@ instance Monad m => MonadState s (ParserT l s e m) where
   state f = ParserT (\_ s -> let (!a, !t) = f s in pure (ParseResult t (ParseValueSuccess a)))
 
 instance Monad m => MonadError e (ParserT l s e m) where
-  throwError e = ParserT (\ls s -> pure (ParseResult s (ParseValueError (LabelledError ls (CompoundErrorCustom e)))))
+  throwError e = ParserT (\ls s -> pure (ParseResult s (ParseValueError (ParseError ls s (CompoundErrorCustom e)))))
   catchError parser handler = ParserT (\ls s -> runParserT parser ls s >>= go ls) where
     go ls res@(ParseResult t v) =
       case v of
-        ParseValueError (LabelledError _ ce) ->
+        ParseValueError (ParseError _ _ ce) ->
           case ce of
             CompoundErrorCustom e -> runParserT (handler e) ls t
             _ -> pure res
@@ -116,7 +117,7 @@ catchJustParser handler parser = ParserT (\ls s -> ListT (go (runParserT parser 
       Just (res@(ParseResult s v), rest) ->
         let nextListt = ListT (go rest)
         in case v of
-          ParseValueError (LabelledError _ (CompoundErrorCustom e) )->
+          ParseValueError (ParseError _ _ (CompoundErrorCustom e)) ->
             case handler e of
               Nothing -> pure (Just (res, nextListt))
               Just a -> pure (Just (ParseResult s (ParseValueSuccess a), nextListt))
@@ -357,10 +358,10 @@ traverseErrorParser f parser = ParserT (\ls s -> ListT (go (runParserT parser ls
       Nothing -> pure Nothing
       Just (ParseResult t v, rest) -> do
         w <- case v of
-          ParseValueError (LabelledError ls ce) ->
+          ParseValueError (ParseError ls es ce) ->
             case ce of
-              CompoundErrorStream se -> pure (ParseValueError (LabelledError ls (CompoundErrorStream se)))
-              CompoundErrorCustom e -> fmap (ParseValueError . LabelledError ls . CompoundErrorCustom) (f t e)
+              CompoundErrorStream se -> pure (ParseValueError (ParseError ls es (CompoundErrorStream se)))
+              CompoundErrorCustom e -> fmap (ParseValueError . ParseError ls es . CompoundErrorCustom) (f t e)
           ParseValueSuccess a -> pure (ParseValueSuccess a)
         pure (Just (ParseResult t w, ListT (go rest)))
 
@@ -371,3 +372,11 @@ mapErrorParser f = traverseErrorParser (\e s -> pure (f e s))
 -- | Push the given label onto the stack to annotate errors in the given parser.
 labelParser :: Monad m => l -> ParserT l s e m a -> ParserT l s e m a
 labelParser = localPushLabel
+
+-- | Skip to the END of any errors. Be careful - this may leave you in strange places!
+fastForwardParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
+fastForwardParser parser = ParserT (\ls s -> fmap go (runParserT parser ls s)) where
+  go res@(ParseResult _ v) =
+    case v of
+      ParseValueError (ParseError _ es _) -> ParseResult es v
+      ParseValueSuccess _ -> res

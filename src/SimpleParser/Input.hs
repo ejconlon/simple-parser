@@ -24,13 +24,13 @@ import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Labels (CompoundLabel, LabelledError (..))
 import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)
-import SimpleParser.Result (CompoundError (..), ParseResult (..), ParseValue (..), RawError (..), StreamError (..))
+import SimpleParser.Result (CompoundError (..), ParseError (..), ParseResult (..), ParseValue (..), RawError (..),
+                            StreamError (..))
 import SimpleParser.Stream (Stream (..))
 
-throwStreamError :: Monad m => RawError (CompoundLabel l) (Chunk s) (Token s) -> ParserT l s e m a
-throwStreamError re = ParserT (\ls s -> pure (ParseResult s (ParseValueError (LabelledError ls (CompoundErrorStream (StreamError re))))))
+throwStreamError :: Monad m => RawError l (Chunk s) (Token s) -> ParserT l s e m a
+throwStreamError re = ParserT (\ls s -> pure (ParseResult s (ParseValueError (ParseError ls s (CompoundErrorStream (StreamError re))))))
 
 withToken :: (Stream s, Monad m) => (Maybe (Token s) -> ParserT l s e m a) -> ParserT l s e m a
 withToken = markWithOptStateParser streamTake1
@@ -79,7 +79,7 @@ anyChunk :: (Stream s, Monad m) => Int -> ParserT l s e m (Chunk s)
 anyChunk n = withChunk n (maybe (throwStreamError RawErrorAnyChunk) pure)
 
 -- | Match the next token with the given predicate or terminate the parser at predicate false or end of stream. (UNSAFE)
-satisfyToken :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m (Token s)
+satisfyToken :: (Stream s, Monad m) => Maybe l -> (Token s -> Bool) -> ParserT l s e m (Token s)
 satisfyToken ml pcate = withToken $ \mu ->
   case mu of
     Just u | pcate u -> pure u
@@ -107,7 +107,7 @@ takeTokensWhile = state . streamTakeWhile
 -- | Take tokens into a chunk while they satisfy the given predicate.
 -- Only succeeds if 1 or more tokens are taken, so it never returns an empty chunk.
 -- Also takes an optional label to describe the predicate. (UNSAFE)
-takeTokensWhile1 :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m (Chunk s)
+takeTokensWhile1 :: (Stream s, Monad m) => Maybe l -> (Token s -> Bool) -> ParserT l s e m (Chunk s)
 takeTokensWhile1 ml pcate = markWithStateParser (streamTakeWhile pcate) $ \j ->
   if chunkEmpty j
     then do
@@ -123,7 +123,7 @@ dropTokensWhile = state . streamDropWhile
 -- | Drop tokens and return chunk size while they satisfy the given predicate.
 -- Only succeeds if 1 or more tokens are dropped.
 -- Also takes an optional label to describe the predicate. (UNSAFE)
-dropTokensWhile1 :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m Int
+dropTokensWhile1 :: (Stream s, Monad m) => Maybe l -> (Token s -> Bool) -> ParserT l s e m Int
 dropTokensWhile1 ml pcate = markWithStateParser (streamDropWhile pcate) $ \s ->
   if s == 0
     then do

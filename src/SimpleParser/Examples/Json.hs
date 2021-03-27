@@ -14,8 +14,8 @@ import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import SimpleParser.Chunked (TextualChunked (..))
-import SimpleParser.Common (betweenParser, escapedStringParser, exclusiveParser, lexemeParser, scientificParser,
-                            sepByParser, spaceParser)
+import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, escapedStringParser, exclusiveParser,
+                            lexemeParser, scientificParser, sepByParser, spaceParser)
 import SimpleParser.Input (matchChunk, matchToken)
 import SimpleParser.Parser (ParserT)
 import SimpleParser.Stream (Stream (..), TextualStream)
@@ -31,9 +31,13 @@ data JsonF a =
 
 newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
 
-newtype JsonLabel =
-    JsonLabelBranch Text
+data JsonLabel =
+    JsonLabelBranch !Text
+  | JsonLabelEmbedText !TextLabel
   deriving (Eq, Show)
+
+instance EmbedTextLabel JsonLabel where
+  embedTextLabel = JsonLabelEmbedText
 
 type JsonParser l s e m = (l ~ JsonLabel, TextualStream s, Eq (Chunk s), Monad m)
 

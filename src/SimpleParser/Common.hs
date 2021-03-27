@@ -1,7 +1,10 @@
 -- | Common parsers.
 -- See <https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Char-Lexer.html Text.Megaparsec.Char.Lexer>.
 module SimpleParser.Common
-  ( exclusiveParser
+  ( TextLabel (..)
+  , EmbedTextLabel (..)
+  , CompoundTextLabel (..)
+  , exclusiveParser
   , sepByParser
   , betweenParser
   , lexemeParser
@@ -27,10 +30,31 @@ import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
-import SimpleParser.Labels (CompoundLabel (..), StreamLabel (..))
 import SimpleParser.Parser (ParserT, andAllParser, defaultParser, greedyStarParser, isolateParser, labelParser,
                             optionalParser, orParser)
 import SimpleParser.Stream (Span (..), Stream (..), StreamWithPos (..))
+
+-- | Enumeration of common labels in textual parsing.
+data TextLabel =
+    StreamLabelSpace
+  | StreamLabelHSpace
+  | StreamLabelDigit
+  deriving (Eq, Show)
+
+class EmbedTextLabel l where
+  embedTextLabel :: TextLabel -> l
+
+instance EmbedTextLabel TextLabel where
+  embedTextLabel = id
+
+-- | Union of text and custom labels
+data CompoundTextLabel l =
+    CompoundTextLabelText !TextLabel
+  | CompoundTextLabelCustom !l
+  deriving (Eq, Show, Functor, Foldable, Traversable)
+
+instance EmbedTextLabel (CompoundTextLabel l) where
+  embedTextLabel = CompoundTextLabelText
 
 -- | From a list of labeled branches, yield a single successful result, or report all errors.
 exclusiveParser :: (Foldable f, Monad m) => f (l, ParserT l s e m a) -> ParserT l s e m a
@@ -91,35 +115,35 @@ hspaceParser :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
 hspaceParser = void (dropTokensWhile isHSpace)
 
 -- | Consumes 1 or more space characters.
-spaceParser1 :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-spaceParser1 = void (dropTokensWhile1 (Just (CompoundLabelStream StreamLabelSpace)) isSpace)
+spaceParser1 :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
+spaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel StreamLabelSpace)) isSpace)
 
 -- | Consumes 1 or more non-line-break space characters
-hspaceParser1 :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-hspaceParser1 = void (dropTokensWhile1 (Just (CompoundLabelStream StreamLabelHSpace)) isHSpace)
+hspaceParser1 :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
+hspaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel StreamLabelHSpace)) isHSpace)
 
 -- | Parses an integer in decimal representation (equivalent to Megaparsec's 'decimal').
-decimalParser :: (Stream s, Token s ~ Char, Monad m, Num a) => ParserT l s e m a
-decimalParser = fmap mkNum (takeTokensWhile1 (Just (CompoundLabelStream StreamLabelDigit)) isDigit) where
+decimalParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m, Num a) => ParserT l s e m a
+decimalParser = fmap mkNum (takeTokensWhile1 (Just (embedTextLabel StreamLabelDigit)) isDigit) where
   mkNum = foldl' step 0 . chunkToTokens
   step a c = a * 10 + fromIntegral (digitToInt c)
 
 data SP = SP !Integer !Int
 
-dotDecimalParser :: (Stream s, Token s ~ Char, Monad m) => Integer -> ParserT l s e m SP
+dotDecimalParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => Integer -> ParserT l s e m SP
 dotDecimalParser c' = do
   void (matchToken '.')
   let mkNum = foldl' step (SP c' 0) . chunkToTokens
       step (SP a e') c = SP (a * 10 + fromIntegral (digitToInt c)) (e' - 1)
-  fmap mkNum (takeTokensWhile1 (Just (CompoundLabelStream StreamLabelDigit)) isDigit)
+  fmap mkNum (takeTokensWhile1 (Just (embedTextLabel StreamLabelDigit)) isDigit)
 
-exponentParser :: (Stream s, Token s ~ Char, Monad m) => Int -> ParserT l s e m Int
+exponentParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => Int -> ParserT l s e m Int
 exponentParser e' = do
   void (orParser (matchToken 'e') (matchToken 'E'))
   fmap (+ e') (signedParser (pure ()) decimalParser)
 
 -- | Parses a floating point value as a 'Scientific' number (equivalent to Megaparsec's 'scientific').
-scientificParser :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m Scientific
+scientificParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m Scientific
 scientificParser = do
   c' <- decimalParser
   SP c e' <- defaultParser (SP c' 0) (dotDecimalParser c')
