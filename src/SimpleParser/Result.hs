@@ -2,9 +2,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module SimpleParser.Result
-  ( StreamError (..)
+  ( RawError (..)
+  , StreamError (..)
   , CompoundError (..)
   , ParseError
+  , mkLabelledParseError
+  , mkUnlabelledParseError
   , ParseResult (..)
   , ParseValue (..)
   , onParseValue
@@ -13,24 +16,24 @@ module SimpleParser.Result
   , onParseResult
   ) where
 
-import SimpleParser.Labels (LabelledError)
+import SimpleParser.Labels (CompoundLabel, LabelledError, mkLabelledError, mkUnlabelledError)
 import SimpleParser.Stream (Stream (..))
 
-data RawStreamError label chunk token =
+data RawError label chunk token =
     RawErrorMatchEnd !token
   | RawErrorAnyToken
   | RawErrorAnyChunk
   | RawErrorSatisfyToken !(Maybe label) !(Maybe token)
   | RawErrorMatchToken !token !(Maybe token)
   | RawErrorMatchChunk !chunk !(Maybe chunk)
-  | RawErrorTakeTokensWhile1 !label !(Maybe token)
-  | RawErrorDropTokensWhile1 !label !(Maybe token)
+  | RawErrorTakeTokensWhile1 !(Maybe label) !(Maybe token)
+  | RawErrorDropTokensWhile1 !(Maybe label) !(Maybe token)
   deriving (Eq, Show)
 
 -- | 'RawStreamError' specialized to 'Stream' types - newtyped to allow GHC
 -- to derive eq/show in the absense of type families.
 newtype StreamError l s = StreamError
-  { unStreamError :: RawStreamError l (Chunk s) (Token s)
+  { unStreamError :: RawError (CompoundLabel l) (Chunk s) (Token s)
   }
 
 deriving instance (Eq l, Eq (Token s), Eq (Chunk s)) => Eq (StreamError l s)
@@ -45,6 +48,12 @@ deriving instance (Eq l, Eq (Token s), Eq (Chunk s), Eq e) => Eq (CompoundError 
 deriving instance (Show l, Show (Token s), Show (Chunk s), Show e) => Show (CompoundError l s e)
 
 type ParseError l s e = LabelledError l (CompoundError l s e)
+
+mkLabelledParseError :: Foldable f => f l -> e -> ParseError l s e
+mkLabelledParseError fl = mkLabelledError fl . CompoundErrorCustom
+
+mkUnlabelledParseError :: e -> ParseError l s e
+mkUnlabelledParseError = mkUnlabelledError . CompoundErrorCustom
 
 -- | Strict 'Either' for parse results.
 data ParseValue l s e a =

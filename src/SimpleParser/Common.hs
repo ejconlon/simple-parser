@@ -1,7 +1,8 @@
 -- | Common parsers.
 -- See <https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Char-Lexer.html Text.Megaparsec.Char.Lexer>.
 module SimpleParser.Common
-  ( sepByParser
+  ( exclusiveParser
+  , sepByParser
   , betweenParser
   , lexemeParser
   , newlineParser
@@ -20,13 +21,20 @@ module SimpleParser.Common
 import Control.Monad (void)
 import Control.Monad.State (get, gets)
 import Data.Char (digitToInt, isDigit, isSpace)
+import Data.Foldable (toList)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
-import SimpleParser.Parser (ParserT, defaultSuccessParser, greedyStarParser, optionalParser, orParser)
+import SimpleParser.Labels (CompoundLabel (..), StreamLabel (..))
+import SimpleParser.Parser (ParserT, andAllParser, defaultParser, greedyStarParser, isolateParser, labelParser,
+                            optionalParser, orParser)
 import SimpleParser.Stream (Span (..), Stream (..), StreamWithPos (..))
+
+-- | From a list of labeled branches, yield a single successful result, or report all errors.
+exclusiveParser :: (Foldable f, Monad m) => f (l, ParserT l s e m a) -> ParserT l s e m a
+exclusiveParser = isolateParser . andAllParser . fmap (uncurry labelParser) . toList
 
 -- | Yields the maximal list of separated items. May return an empty list.
 sepByParser :: (Chunked seq elem, Monad m) =>
@@ -84,15 +92,15 @@ hspaceParser = void (dropTokensWhile isHSpace)
 
 -- | Consumes 1 or more space characters.
 spaceParser1 :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-spaceParser1 = void (dropTokensWhile1 isSpace)
+spaceParser1 = void (dropTokensWhile1 (Just (CompoundLabelStream StreamLabelSpace)) isSpace)
 
 -- | Consumes 1 or more non-line-break space characters
 hspaceParser1 :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-hspaceParser1 = void (dropTokensWhile1 isHSpace)
+hspaceParser1 = void (dropTokensWhile1 (Just (CompoundLabelStream StreamLabelHSpace)) isHSpace)
 
 -- | Parses an integer in decimal representation (equivalent to Megaparsec's 'decimal').
 decimalParser :: (Stream s, Token s ~ Char, Monad m, Num a) => ParserT l s e m a
-decimalParser = fmap mkNum (takeTokensWhile1 isDigit) where
+decimalParser = fmap mkNum (takeTokensWhile1 (Just (CompoundLabelStream StreamLabelDigit)) isDigit) where
   mkNum = foldl' step 0 . chunkToTokens
   step a c = a * 10 + fromIntegral (digitToInt c)
 
@@ -103,7 +111,7 @@ dotDecimalParser c' = do
   void (matchToken '.')
   let mkNum = foldl' step (SP c' 0) . chunkToTokens
       step (SP a e') c = SP (a * 10 + fromIntegral (digitToInt c)) (e' - 1)
-  fmap mkNum (takeTokensWhile1 isDigit)
+  fmap mkNum (takeTokensWhile1 (Just (CompoundLabelStream StreamLabelDigit)) isDigit)
 
 exponentParser :: (Stream s, Token s ~ Char, Monad m) => Int -> ParserT l s e m Int
 exponentParser e' = do
@@ -114,8 +122,8 @@ exponentParser e' = do
 scientificParser :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m Scientific
 scientificParser = do
   c' <- decimalParser
-  SP c e' <- defaultSuccessParser (SP c' 0) (dotDecimalParser c')
-  e <- defaultSuccessParser e' (exponentParser e')
+  SP c e' <- defaultParser (SP c' 0) (dotDecimalParser c')
+  e <- defaultParser e' (exponentParser e')
   pure (Sci.scientific c e)
 
 -- | Parses an optional sign character followed by a number and yields a correctly-signed
@@ -127,7 +135,7 @@ signedParser :: (Stream s, Token s ~ Char, Monad m, Num a) =>
   ParserT l s e m a ->
   -- | Parser for signed numbers
   ParserT l s e m a
-signedParser spc p = defaultSuccessParser id (lexemeParser spc sign) <*> p where
+signedParser spc p = defaultParser id (lexemeParser spc sign) <*> p where
   sign = orParser (id <$ matchToken '+') (negate <$ matchToken '-')
 
 data Pair = Pair ![Char] !Bool

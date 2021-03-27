@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1ddfc68bd3e843bf84e39aa6e2d368b16d7e39d5fddc64c09751a2099d3ecf8c
+-- hash: bd13848c01cc69bc5ca363fc4841aaa718f3ff38ec197c4a3179551e2d24271c
 
 name:           simple-parser
 version:        0.3.0
@@ -34,8 +34,6 @@ library
       SimpleParser.Common
       SimpleParser.Examples.Json
       SimpleParser.Examples.Sexp
-      SimpleParser.Experimental.Assert
-      SimpleParser.Experimental.Report
       SimpleParser.Input
       SimpleParser.Labels
       SimpleParser.Parser

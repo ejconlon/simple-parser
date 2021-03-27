@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module SimpleParser.Examples.Sexp
   ( Sexp (..)
   , SexpF (..)
@@ -13,10 +15,11 @@ import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import SimpleParser.Chunked (Chunked (..), packChunk)
-import SimpleParser.Common (betweenParser, decimalParser, escapedStringParser, lexemeParser, scientificParser,
-                            sepByParser, signedParser, spaceParser)
+import SimpleParser.Common (betweenParser, decimalParser, escapedStringParser, exclusiveParser, lexemeParser,
+                            scientificParser, sepByParser, signedParser, spaceParser)
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
+import SimpleParser.Labels (CompoundLabel (..))
+import SimpleParser.Parser (ParserT)
 import SimpleParser.Stream (TextualStream)
 
 data Atom =
@@ -31,18 +34,23 @@ data SexpF a =
   | SexpList !(Seq a)
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
+data SexpLabel =
+    SexpLabelBranch !Text
+  | SexpLabelIdentStart
+  deriving (Eq, Show)
+
 newtype Sexp = Sexp { unSexp :: SexpF Sexp }
   deriving (Eq, Show)
 
-type SexpParser s m = (TextualStream s, Monad m)
+type SexpParser l s m = (l ~ SexpLabel, TextualStream s, Monad m)
 
-sexpParser :: SexpParser s m => ParserT l s e m Sexp
+sexpParser :: SexpParser l s m => ParserT l s e m Sexp
 sexpParser = let p = fmap Sexp (recSexpParser p) in p
 
-recSexpParser :: SexpParser s m => ParserT l s e m a -> ParserT l s e m (SexpF a)
-recSexpParser root = isolateParser $ andAllParser
-  [ fmap SexpList (listP root)
-  , fmap SexpAtom atomP
+recSexpParser :: SexpParser l s m => ParserT l s e m a -> ParserT l s e m (SexpF a)
+recSexpParser root = exclusiveParser
+  [ (SexpLabelBranch "list", fmap SexpList (listP root))
+  , (SexpLabelBranch "atom", fmap SexpAtom atomP)
   ]
 
 nonDelimPred :: Char -> Bool
@@ -54,40 +62,40 @@ identStartPred c = not (isDigit c) && identContPred c
 identContPred :: Char -> Bool
 identContPred c = c /= '"' && nonDelimPred c
 
-stringP :: SexpParser s m => ParserT l s e m Text
+stringP :: SexpParser l s m => ParserT l s e m Text
 stringP = fmap packChunk (escapedStringParser '"')
 
-identifierP :: SexpParser s m => ParserT l s e m Text
+identifierP :: SexpParser l s m => ParserT l s e m Text
 identifierP = do
-  x <- satisfyToken identStartPred
+  x <- satisfyToken (Just (CompoundLabelCustom SexpLabelIdentStart)) identStartPred
   xs <- takeTokensWhile identContPred
   pure (packChunk (consChunk x xs))
 
-spaceP :: SexpParser s m => ParserT l s e m ()
+spaceP :: SexpParser l s m => ParserT l s e m ()
 spaceP = spaceParser
 
-lexP :: SexpParser s m => ParserT l s e m a -> ParserT l s e m a
+lexP :: SexpParser l s m => ParserT l s e m a -> ParserT l s e m a
 lexP = lexemeParser spaceP
 
-openParenP :: SexpParser s m => ParserT l s e m ()
+openParenP :: SexpParser l s m => ParserT l s e m ()
 openParenP = lexP (void (matchToken '('))
 
-closeParenP :: SexpParser s m => ParserT l s e m ()
+closeParenP :: SexpParser l s m => ParserT l s e m ()
 closeParenP = lexP (void (matchToken ')'))
 
-intP :: SexpParser s m => ParserT l s e m Integer
+intP :: SexpParser l s m => ParserT l s e m Integer
 intP = signedParser (pure ()) decimalParser
 
-floatP :: SexpParser s m => ParserT l s e m Scientific
+floatP :: SexpParser l s m => ParserT l s e m Scientific
 floatP = signedParser (pure ()) scientificParser
 
-atomP :: SexpParser s m => ParserT l s e m Atom
-atomP = lexP $ isolateParser $ andAllParser
-  [ fmap AtomString stringP
-  , fmap AtomInt intP
-  , fmap AtomFloat floatP
-  , fmap AtomIdent identifierP
+atomP :: SexpParser l s m => ParserT l s e m Atom
+atomP = lexP $ exclusiveParser
+  [ (SexpLabelBranch "string", fmap AtomString stringP)
+  , (SexpLabelBranch "int", fmap AtomInt intP)
+  , (SexpLabelBranch "float", fmap AtomFloat floatP)
+  , (SexpLabelBranch "identifier", fmap AtomIdent identifierP)
   ]
 
-listP :: SexpParser s m => ParserT l s e m a -> ParserT l s e m (Seq a)
+listP :: SexpParser l s m => ParserT l s e m a -> ParserT l s e m (Seq a)
 listP root = lexP (betweenParser openParenP closeParenP (sepByParser root spaceP))

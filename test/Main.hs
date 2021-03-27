@@ -5,14 +5,14 @@ module Main (main) where
 
 import Control.Applicative (empty)
 import Control.Monad.Except (catchError, throwError)
+import Data.Bifunctor (first)
 import Data.Foldable (asum)
-import Data.Functor (($>))
 import qualified Data.Sequence as Seq
 import Data.String (IsString)
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser
-import SimpleParser.Examples.Json (Json (..), JsonContext, JsonF (..), jsonParser)
+import SimpleParser.Examples.Json (Json (..), JsonF (..), JsonLabel, jsonParser)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -27,10 +27,23 @@ type TestParser a = Parser Label TestState Error a
 
 type TestResult a = ParseResult Label TestState Error a
 
+type TestRawError = RawError (CompoundLabel Label) Text Char
+
+type TestParseError = ParseError Label TestState Error
+
 data InputOutput a = InputOutput !Text ![TestResult a]
 
-unlabelledCustomError :: Error -> ParseError Label TestState Error
-unlabelledCustomError = unlabelledError . CompoundErrorCustom
+mkUnlabelledCustomError :: Error -> ParseError Label TestState Error
+mkUnlabelledCustomError = mkUnlabelledParseError
+
+mkUnlabelledCustomResult :: TestState -> Error -> TestResult a
+mkUnlabelledCustomResult s = mkParseErrorResult s . mkUnlabelledCustomError
+
+mkUnlabelledStreamError :: TestRawError -> ParseError Label TestState Error
+mkUnlabelledStreamError = mkUnlabelledError . CompoundErrorStream . StreamError
+
+mkUnlabelledStreamResult :: TestState -> TestRawError -> TestResult a
+mkUnlabelledStreamResult s = mkParseErrorResult s . mkUnlabelledStreamError
 
 runParserCase :: (Show a, Eq a) => TestParser a -> InputOutput a -> Assertion
 runParserCase parser (InputOutput input expected) = do
@@ -126,7 +139,7 @@ test_match_end =
   let parser = matchEnd
       cases =
         [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") ()])
-        , ("non-empty", InputOutput "hi" [])
+        , ("non-empty", InputOutput "hi" [mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchEnd 'h')])
         ]
   in testParserTrees parser cases
 
@@ -134,7 +147,7 @@ test_any_token :: [TestTree]
 test_any_token =
   let parser = anyToken
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
         ]
   in testParserTrees parser cases
@@ -143,7 +156,7 @@ test_any_chunk :: [TestTree]
 test_any_chunk =
   let parser = anyChunk 2 :: TestParser Text
       cases =
-        [ ("len 0", InputOutput "" [])
+        [ ("len 0", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyChunk])
         , ("len 1", InputOutput "h" [mkParseSuccessResult (OffsetStream 1 "") "h"])
         , ("len 2", InputOutput "hi" [mkParseSuccessResult (OffsetStream 2 "") "hi"])
         , ("len 3", InputOutput "hii" [mkParseSuccessResult (OffsetStream 2 "i") "hi"])
@@ -154,9 +167,9 @@ test_match_token :: [TestTree]
 test_match_token =
   let parser = matchToken 'h'
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing)])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
-        , ("non-match", InputOutput "bye" [])
+        , ("non-match", InputOutput "bye" [mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'h' (Just 'b'))])
         ]
   in testParserTrees parser cases
 
@@ -164,11 +177,11 @@ test_match_chunk :: [TestTree]
 test_match_chunk =
   let parser = matchChunk "hi"
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchChunk "hi" Nothing)])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 2 "") "hi"])
         , ("prefix", InputOutput "hiya" [mkParseSuccessResult (OffsetStream 2 "ya") "hi"])
-        , ("partial", InputOutput "hey" [])
-        , ("non-match", InputOutput "bye" [])
+        , ("partial", InputOutput "hey" [mkUnlabelledStreamResult (OffsetStream 0 "hey") (RawErrorMatchChunk "hi" (Just "he"))])
+        , ("non-match", InputOutput "bye" [mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchChunk "hi" (Just "by"))])
         ]
   in testParserTrees parser cases
 
@@ -200,11 +213,11 @@ test_greedy_plus :: [TestTree]
 test_greedy_plus =
   let parser = greedyPlusParser (matchToken 'h') :: TestParser String
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing)])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") "h"])
         , ("repeat", InputOutput "hhi" [mkParseSuccessResult (OffsetStream 2 "i") "hh"])
         , ("full", InputOutput "hhh" [mkParseSuccessResult (OffsetStream 3 "") "hhh"])
-        , ("non-match", InputOutput "bye" [])
+        , ("non-match", InputOutput "bye" [mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'h' (Just 'b'))])
         ]
   in testParserTrees parser cases
 
@@ -212,11 +225,11 @@ test_greedy_plus_unit :: [TestTree]
 test_greedy_plus_unit =
   let parser = greedyPlusParser_ (matchToken 'h')
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing)])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") ()])
         , ("repeat", InputOutput "hhi" [mkParseSuccessResult (OffsetStream 2 "i") ()])
         , ("full", InputOutput "hhh" [mkParseSuccessResult (OffsetStream 3 "") ()])
-        , ("non-match", InputOutput "bye" [])
+        , ("non-match", InputOutput "bye" [mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'h' (Just 'b'))])
         ]
   in testParserTrees parser cases
 
@@ -224,29 +237,26 @@ test_or :: [TestTree]
 test_or =
   let parser = orParser (matchToken 'h') (matchToken 'x')
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing),
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing)])
         , ("first", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
         , ("second", InputOutput "xi" [mkParseSuccessResult (OffsetStream 1 "i") 'x'])
-        , ("non-match", InputOutput "bye" [])
-        ]
-  in testParserTrees parser cases
-
-test_or_first :: [TestTree]
-test_or_first =
-  let parser = orParser (anyToken $> 'h') (matchToken 'x')
-      cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
-        , ("second", InputOutput "xi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
+        , ("non-match", InputOutput "bye" [
+            mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'h' (Just 'b')),
+            mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'x' (Just 'b'))])
         ]
   in testParserTrees parser cases
 
 test_or_all :: [TestTree]
 test_or_all =
   let state = OffsetStream 1 "i"
-      parser = orAllParser [matchToken 'h', anyToken $> 'y', matchToken 'x']
+      parser = orAllParser [matchToken 'h', 'y' <$ anyToken, matchToken 'x']
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing),
+            mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken,
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing)])
         , ("first", InputOutput "hi" [mkParseSuccessResult state 'h'])
         , ("middle", InputOutput "zi" [mkParseSuccessResult state 'y'])
         , ("last", InputOutput "xi" [mkParseSuccessResult state 'y'])
@@ -257,30 +267,44 @@ test_and :: [TestTree]
 test_and =
   let parser = andParser (matchToken 'h') (matchToken 'x')
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
-        , ("second", InputOutput "xi" [mkParseSuccessResult (OffsetStream 1 "i") 'x'])
-        , ("non-match", InputOutput "bye" [])
+        [ ("empty", InputOutput "" [
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing),
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing)])
+        , ("first", InputOutput "hi" [
+            mkParseSuccessResult (OffsetStream 1 "i") 'h',
+            mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchToken 'x' (Just 'h'))])
+        , ("second", InputOutput "xi" [
+            mkUnlabelledStreamResult (OffsetStream 0 "xi") (RawErrorMatchToken 'h' (Just 'x')),
+            mkParseSuccessResult (OffsetStream 1 "i") 'x'])
+        , ("non-match", InputOutput "bye" [
+            mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'h' (Just 'b')),
+            mkUnlabelledStreamResult (OffsetStream 0 "bye") (RawErrorMatchToken 'x' (Just 'b'))])
         ]
   in testParserTrees parser cases
 
 test_and_first :: [TestTree]
 test_and_first =
   let state = OffsetStream 1 "i"
-      parser = andParser (anyToken $> 'h') (matchToken 'x')
+      parser = andParser ('h' <$ anyToken) (matchToken 'x')
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult state 'h'])
-        , ("second", InputOutput "xi" [mkParseSuccessResult state 'h', mkParseSuccessResult state 'x'])
+        [ ("empty", InputOutput "" [
+            mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken,
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing)])
+        , ("first", InputOutput "hi" [
+            mkParseSuccessResult state 'h',
+            mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchToken 'x' (Just 'h'))])
+        , ("second", InputOutput "xi" [
+            mkParseSuccessResult state 'h',
+            mkParseSuccessResult state 'x'])
         ]
   in testParserTrees parser cases
 
 test_and_second :: [TestTree]
 test_and_second =
   let state = OffsetStream 1 "i"
-      parser = andParser empty (anyToken $> 'x')
+      parser = andParser empty ('x' <$ anyToken)
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
         , ("first", InputOutput "hi" [mkParseSuccessResult state 'x'])
         , ("second", InputOutput "xi" [mkParseSuccessResult state 'x'])
         ]
@@ -289,41 +313,65 @@ test_and_second =
 test_and_all :: [TestTree]
 test_and_all =
   let state = OffsetStream 1 "i"
-      parser = andAllParser [matchToken 'h', anyToken $> 'y', matchToken 'x']
+      parser = andAllParser [matchToken 'h', 'y' <$ anyToken, matchToken 'x']
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult state 'h', mkParseSuccessResult state 'y'])
-        , ("middle", InputOutput "zi" [mkParseSuccessResult state 'y'])
-        , ("last", InputOutput "xi" [mkParseSuccessResult state 'y', mkParseSuccessResult state 'x'])
+        [ ("empty", InputOutput "" [
+          mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing),
+          mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken,
+          mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing) ])
+        , ("first", InputOutput "hi" [
+          mkParseSuccessResult state 'h',
+          mkParseSuccessResult state 'y',
+          mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchToken 'x' (Just 'h'))])
+        , ("middle", InputOutput "zi" [
+          mkUnlabelledStreamResult (OffsetStream 0 "zi") (RawErrorMatchToken 'h' (Just 'z')),
+          mkParseSuccessResult state 'y',
+          mkUnlabelledStreamResult (OffsetStream 0 "zi") (RawErrorMatchToken 'x' (Just 'z'))])
+        , ("last", InputOutput "xi" [
+          mkUnlabelledStreamResult (OffsetStream 0 "xi") (RawErrorMatchToken 'h' (Just 'x')),
+          mkParseSuccessResult state 'y',
+          mkParseSuccessResult state 'x'])
         ]
   in testParserTrees parser cases
 
 test_asum :: [TestTree]
 test_asum =
   let state = OffsetStream 1 "i"
-      parser = asum [matchToken 'h', anyToken $> 'y', matchToken 'x']
+      parser = asum [matchToken 'h', 'y' <$ anyToken, matchToken 'x']
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult state 'h', mkParseSuccessResult state 'y'])
-        , ("middle", InputOutput "zi" [mkParseSuccessResult state 'y'])
-        , ("last", InputOutput "xi" [mkParseSuccessResult state 'y', mkParseSuccessResult state 'x'])
+        [ ("empty", InputOutput "" [
+          mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'h' Nothing),
+          mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken,
+          mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing) ])
+        , ("first", InputOutput "hi" [
+          mkParseSuccessResult state 'h',
+          mkParseSuccessResult state 'y',
+          mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchToken 'x' (Just 'h'))])
+        , ("middle", InputOutput "zi" [
+          mkUnlabelledStreamResult (OffsetStream 0 "zi") (RawErrorMatchToken 'h' (Just 'z')),
+          mkParseSuccessResult state 'y',
+          mkUnlabelledStreamResult (OffsetStream 0 "zi") (RawErrorMatchToken 'x' (Just 'z'))])
+        , ("last", InputOutput "xi" [
+          mkUnlabelledStreamResult (OffsetStream 0 "xi") (RawErrorMatchToken 'h' (Just 'x')),
+          mkParseSuccessResult state 'y',
+          mkParseSuccessResult state 'x'])
         ]
   in testParserTrees parser cases
 
-test_with_default_empty :: [TestTree]
-test_with_default_empty =
-  let parser = defaultSuccessParser 'z' empty
+test_default_empty :: [TestTree]
+test_default_empty =
+  let parser = defaultParser 'z' empty
       cases =
         [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 'z'])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 0 "hi") 'z'])
         ]
   in testParserTrees parser cases
 
-test_with_default :: [TestTree]
-test_with_default =
-  let parser = defaultSuccessParser 'z' (matchToken 'h')
+test_default :: [TestTree]
+test_default =
+  let parser = defaultParser 'z' (matchToken 'h')
       cases =
-        [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 'z'])
+        [ ("non-match empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 'z'])
         , ("match", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 'h'])
         , ("non-match", InputOutput "bye" [mkParseSuccessResult (OffsetStream 0 "bye") 'z'])
         ]
@@ -332,11 +380,17 @@ test_with_default =
 test_bind_multi_pre :: [TestTree]
 test_bind_multi_pre =
   let state = OffsetStream 1 "i"
-      parser = asum [anyToken $> 'h', matchToken 'x'] >>= \c -> pure [c, c]
+      parser = asum ['h' <$ anyToken, matchToken 'x'] >>= \c -> pure [c, c]
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("first", InputOutput "hi" [mkParseSuccessResult state "hh"])
-        , ("second", InputOutput "xi" [mkParseSuccessResult state "hh", mkParseSuccessResult state "xx"])
+        [ ("empty", InputOutput "" [
+            mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken,
+            mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorMatchToken 'x' Nothing)])
+        , ("first", InputOutput "hi" [
+            mkParseSuccessResult state "hh",
+            mkUnlabelledStreamResult (OffsetStream 0 "hi") (RawErrorMatchToken 'x' (Just 'h'))])
+        , ("second", InputOutput "xi" [
+            mkParseSuccessResult state "hh",
+            mkParseSuccessResult state "xx"])
         ]
   in testParserTrees parser cases
 
@@ -346,7 +400,7 @@ test_bind_multi_post =
       state2 = OffsetStream 2 ""
       parser = anyToken >>= \x -> asum [pure x, matchToken 'i']
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
         , ("first", InputOutput "hi" [mkParseSuccessResult state1 'h', mkParseSuccessResult state2 'i'])
         , ("second", InputOutput "xi" [mkParseSuccessResult state1 'x', mkParseSuccessResult state2 'i'])
         ]
@@ -357,8 +411,8 @@ test_throw =
   let err = Error "boo"
       parser = throwError err :: TestParser Int
       cases =
-        [ ("empty", InputOutput "" [mkParseErrorResult (OffsetStream 0 "") (unlabelledCustomError err)])
-        , ("non-empty", InputOutput "hi" [mkParseErrorResult (OffsetStream 0 "hi") (unlabelledCustomError err)])
+        [ ("empty", InputOutput "" [mkUnlabelledCustomResult (OffsetStream 0 "") err])
+        , ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult (OffsetStream 0 "hi") err])
         ]
   in testParserTrees parser cases
 
@@ -367,28 +421,28 @@ test_consume_throw =
   let err = Error "boo"
       parser = anyToken *> throwError err :: TestParser Int
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("non-empty", InputOutput "hi" [mkParseErrorResult (OffsetStream 1 "i") (unlabelledCustomError err)])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
+        , ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult (OffsetStream 1 "i") err])
         ]
   in testParserTrees parser cases
 
-test_with_default_throw :: [TestTree]
-test_with_default_throw =
+test_default_throw :: [TestTree]
+test_default_throw =
   let err = Error "boo"
-      parser = defaultSuccessParser 'z' (throwError err)
-      cases =
-        [ ("empty", InputOutput "" [mkParseErrorResult (OffsetStream 0 "") (unlabelledCustomError err)])
-        , ("non-empty", InputOutput "hi" [mkParseErrorResult (OffsetStream 0 "hi") (unlabelledCustomError err)])
-        ]
-  in testParserTrees parser cases
-
-test_with_default_consume_throw :: [TestTree]
-test_with_default_consume_throw =
-  let err = Error "boo"
-      parser = defaultSuccessParser 'z' (anyToken *> throwError err)
+      parser = defaultParser 'z' (throwError err)
       cases =
         [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 'z'])
-        , ("non-empty", InputOutput "hi" [mkParseErrorResult (OffsetStream 1 "i") (unlabelledCustomError err)])
+        , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 0 "hi") 'z'])
+        ]
+  in testParserTrees parser cases
+
+test_default_consume_throw :: [TestTree]
+test_default_consume_throw =
+  let err = Error "boo"
+      parser = defaultParser 'z' (anyToken *> throwError err)
+      cases =
+        [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 'z'])
+        , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 0 "hi") 'z'])
         ]
   in testParserTrees parser cases
 
@@ -398,7 +452,17 @@ test_throw_mixed =
       err = Error "boo"
       parser = asum [throwError err, pure 1 :: TestParser Int]
       cases =
-        [ ("non-empty", InputOutput "hi" [mkParseErrorResult state (unlabelledCustomError err), mkParseSuccessResult state 1])
+        [ ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult state err, mkParseSuccessResult state 1])
+        ]
+  in testParserTrees parser cases
+
+test_throw_mixed_flip :: [TestTree]
+test_throw_mixed_flip =
+  let state = OffsetStream 0 "hi"
+      err = Error "boo"
+      parser = asum [pure 1 :: TestParser Int, throwError err]
+      cases =
+        [ ("non-empty", InputOutput "hi" [mkParseSuccessResult state 1, mkUnlabelledCustomResult state err])
         ]
   in testParserTrees parser cases
 
@@ -419,7 +483,7 @@ test_catch_recur =
       err2 = Error "two"
       parser = catchError (throwError err1) (const (throwError err2)) :: TestParser Int
       cases =
-        [ ("non-empty", InputOutput "hi" [mkParseErrorResult state (unlabelledCustomError err2)])
+        [ ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult state err2])
         ]
   in testParserTrees parser cases
 
@@ -457,7 +521,7 @@ test_suppress_fail_both =
       err2 = Error "boo2"
       parser = suppressParser (asum [throwError err1, throwError err2]) :: TestParser Int
       cases =
-        [ ("non-empty", InputOutput "hi" [mkParseErrorResult state (unlabelledCustomError err1), mkParseErrorResult state (unlabelledCustomError err2)])
+        [ ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult state err1, mkUnlabelledCustomResult state err2])
         ]
   in testParserTrees parser cases
 
@@ -495,7 +559,7 @@ test_isolate_fail_both =
       err2 = Error "boo2"
       parser = isolateParser (asum [throwError err1, throwError err2]) :: TestParser Int
       cases =
-        [ ("non-empty", InputOutput "hi" [mkParseErrorResult state (unlabelledCustomError err1), mkParseErrorResult state (unlabelledCustomError err2)])
+        [ ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult state err1, mkUnlabelledCustomResult state err2])
         ]
   in testParserTrees parser cases
 
@@ -536,11 +600,20 @@ test_silence_fail_both =
         ]
   in testParserTrees parser cases
 
+test_look_ahead_pure :: [TestTree]
+test_look_ahead_pure =
+  let parser = lookAheadParser (pure 1) :: TestParser Int
+      cases =
+        [ ("empty", InputOutput "" [mkParseSuccessResult (OffsetStream 0 "") 1])
+        , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 0 "hi") 1])
+        ]
+  in testParserTrees parser cases
+
 test_look_ahead_success :: [TestTree]
 test_look_ahead_success =
   let parser = lookAheadParser anyToken
       cases =
-        [ ("empty", InputOutput "" [])
+        [ ("non-match empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
         , ("non-empty", InputOutput "hi" [mkParseSuccessResult (OffsetStream 0 "hi") 'h'])
         ]
   in testParserTrees parser cases
@@ -550,8 +623,8 @@ test_look_ahead_failure =
   let err = Error "boo"
       parser = lookAheadParser (anyToken *> throwError err) :: TestParser Char
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("non-empty", InputOutput "hi" [mkParseErrorResult (OffsetStream 0 "hi") (unlabelledCustomError err)])
+        [ ("non-match empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") RawErrorAnyToken])
+        , ("non-empty", InputOutput "hi" [mkUnlabelledCustomResult (OffsetStream 0 "hi") err])
         ]
   in testParserTrees parser cases
 
@@ -569,10 +642,10 @@ test_take_while =
 
 test_take_while_1 :: [TestTree]
 test_take_while_1 =
-  let parser = takeTokensWhile1 (=='h') :: TestParser Text
+  let parser = takeTokensWhile1 Nothing (=='h') :: TestParser Text
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("non-match", InputOutput "i" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorTakeTokensWhile1 Nothing Nothing)])
+        , ("non-match", InputOutput "i" [mkUnlabelledStreamResult (OffsetStream 0 "i") (RawErrorTakeTokensWhile1 Nothing (Just 'i'))])
         , ("match", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") "h"])
         , ("match 2", InputOutput "hhi" [mkParseSuccessResult (OffsetStream 2 "i") "hh"])
         , ("match end", InputOutput "hh" [mkParseSuccessResult (OffsetStream 2 "") "hh"])
@@ -593,28 +666,30 @@ test_drop_while =
 
 test_drop_while_1 :: [TestTree]
 test_drop_while_1 =
-  let parser = dropTokensWhile1 (=='h') :: TestParser Int
+  let parser = dropTokensWhile1 Nothing (=='h') :: TestParser Int
       cases =
-        [ ("empty", InputOutput "" [])
-        , ("non-match", InputOutput "i" [])
+        [ ("empty", InputOutput "" [mkUnlabelledStreamResult (OffsetStream 0 "") (RawErrorDropTokensWhile1 Nothing Nothing)])
+        , ("non-match", InputOutput "i" [mkUnlabelledStreamResult (OffsetStream 0 "i") (RawErrorDropTokensWhile1 Nothing (Just 'i'))])
         , ("match", InputOutput "hi" [mkParseSuccessResult (OffsetStream 1 "i") 1])
         , ("match 2", InputOutput "hhi" [mkParseSuccessResult (OffsetStream 2 "i") 2])
         , ("match end", InputOutput "hh" [mkParseSuccessResult (OffsetStream 2 "") 2])
         ]
   in testParserTrees parser cases
 
-testJsonCase :: TestName -> Text -> Maybe Json -> TestTree
+type JsonBundle = Either () (Maybe Json)
+
+testJsonCase :: TestName -> Text -> JsonBundle -> TestTree
 testJsonCase name str expected = testCase ("json " <> name) $ do
   let actual = parseJson str
   actual @?= expected
 
-testJsonTrees :: [(TestName, Text, Maybe Json)] -> [TestTree]
+testJsonTrees :: [(TestName, Text, JsonBundle)] -> [TestTree]
 testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
 
-parseJson :: Text -> Maybe Json
+parseJson :: Text -> JsonBundle
 parseJson str =
-  let p = jsonParser <* matchEnd :: Parser JsonContext Text Void Json
-  in runVoidParser p str
+  let p = jsonParser <* matchEnd :: Parser JsonLabel Text Void Json
+  in first (const ()) (runBundledParser p str)
 
 test_json :: [TestTree]
 test_json =
@@ -625,30 +700,32 @@ test_json =
       strVal = Json . JsonString
       objVal = Json . JsonObject . Seq.fromList
       numVal = Json . JsonNum
+      errRes = Left ()
+      okRes = Right . Just
       cases =
-        [ ("empty", "", Nothing)
-        , ("bad", "bad", Nothing)
-        , ("null", "null", Just nullVal)
-        , ("true", "true", Just trueVal)
-        , ("false", "false", Just falseVal)
-        , ("arr0", "[]", Just (arrVal []))
-        , ("arr1", "[null]", Just (arrVal [nullVal]))
-        , ("arr2", "[null, false]", Just (arrVal [nullVal, falseVal]))
-        , ("arr3", "[null, false, true]", Just (arrVal [nullVal, falseVal, trueVal]))
-        , ("arrx", "[null,]", Nothing)
-        , ("str0", "\"\"", Just (strVal ""))
-        , ("str1", "\"x\"", Just (strVal "x"))
-        , ("str2", "\"xy\"", Just (strVal "xy"))
-        , ("str3", "\"xyz\"", Just (strVal "xyz"))
-        , ("str4", "\"xy\\\"z\"", Just (strVal "xy\"z"))
-        , ("obj0", "{}", Just (objVal []))
-        , ("obj1", "{\"x\": true}", Just (objVal [("x", trueVal)]))
-        , ("obj2", "{\"x\": true, \"y\": false}", Just (objVal [("x", trueVal), ("y", falseVal)]))
-        , ("num0", "0", Just (numVal (read "0")))
-        , ("num1", "123", Just (numVal (read "123")))
-        , ("num2", "123.45", Just (numVal (read "123.45")))
-        , ("num3", "1e100", Just (numVal (read "1e100")))
-        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", Just (objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]))
+        [ ("empty", "", errRes)
+        , ("bad", "bad", errRes)
+        , ("null", "null", okRes nullVal)
+        , ("true", "true", okRes trueVal)
+        , ("false", "false", okRes falseVal)
+        , ("arr0", "[]", okRes (arrVal []))
+        , ("arr1", "[null]", okRes (arrVal [nullVal]))
+        , ("arr2", "[null, false]", okRes (arrVal [nullVal, falseVal]))
+        , ("arr3", "[null, false, true]", okRes (arrVal [nullVal, falseVal, trueVal]))
+        , ("arrx", "[null,]", errRes)
+        , ("str0", "\"\"", okRes (strVal ""))
+        , ("str1", "\"x\"", okRes (strVal "x"))
+        , ("str2", "\"xy\"", okRes (strVal "xy"))
+        , ("str3", "\"xyz\"", okRes (strVal "xyz"))
+        , ("str4", "\"xy\\\"z\"", okRes (strVal "xy\"z"))
+        , ("obj0", "{}", okRes (objVal []))
+        , ("obj1", "{\"x\": true}", okRes (objVal [("x", trueVal)]))
+        , ("obj2", "{\"x\": true, \"y\": false}", okRes (objVal [("x", trueVal), ("y", falseVal)]))
+        , ("num0", "0", okRes (numVal (read "0")))
+        , ("num1", "123", okRes (numVal (read "123")))
+        , ("num2", "123.45", okRes (numVal (read "123.45")))
+        , ("num3", "1e100", okRes (numVal (read "1e100")))
+        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", okRes (objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]))
         ]
   in testJsonTrees cases
 

@@ -1,4 +1,5 @@
 -- | Useful combinators for 'ParserT' and 'Stream'.
+-- Classified as SAFE or UNSAFE. SAFE always return a value. UNSAFE throw.
 module SimpleParser.Input
   ( peekToken
   , popToken
@@ -19,64 +20,73 @@ module SimpleParser.Input
   , matchChunk
   ) where
 
-import Control.Applicative (empty)
 import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Parser (ParserT)
+import SimpleParser.Labels (CompoundLabel, LabelledError (..))
+import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)
+import SimpleParser.Result (CompoundError (..), ParseResult (..), ParseValue (..), RawError (..), StreamError (..))
 import SimpleParser.Stream (Stream (..))
 
--- | Return the next token, if any, but don't consume it.
+throwStreamError :: Monad m => RawError (CompoundLabel l) (Chunk s) (Token s) -> ParserT l s e m a
+throwStreamError re = ParserT (\ls s -> pure (ParseResult s (ParseValueError (LabelledError ls (CompoundErrorStream (StreamError re))))))
+
+withToken :: (Stream s, Monad m) => (Maybe (Token s) -> ParserT l s e m a) -> ParserT l s e m a
+withToken = markWithOptStateParser streamTake1
+
+withChunk :: (Stream s, Monad m) => Int -> (Maybe (Chunk s) -> ParserT l s e m a) -> ParserT l s e m a
+withChunk n = markWithOptStateParser (streamTakeN n)
+
+-- | Return the next token, if any, but don't consume it. (SAFE)
 peekToken :: (Stream s, Monad m) => ParserT l s e m (Maybe (Token s))
 peekToken = gets (fmap fst . streamTake1)
 
--- | Return the next token, if any, and consume it.
+-- | Return the next token, if any, and consume it. (SAFE)
 popToken :: (Stream s, Monad m) => ParserT l s e m (Maybe (Token s))
 popToken = state (\stream -> maybe (Nothing, stream) (first Just) (streamTake1 stream))
 
 -- | Return the next chunk of the given size, if any, but don't consume it.
--- May return a smaller chunk at end of stream, but never returns an empty chunk.
+-- May return a smaller chunk at end of stream, but never returns an empty chunk. (SAFE)
 peekChunk :: (Stream s, Monad m) => Int -> ParserT l s e m (Maybe (Chunk s))
 peekChunk n = gets (fmap fst . streamTakeN n)
 
 -- | Return the next chunk of the given size, if any, and consume it.
--- May return a smaller chunk at end of stream, but never returns an empty chunk.
+-- May return a smaller chunk at end of stream, but never returns an empty chunk. (SAFE)
 popChunk :: (Stream s, Monad m) => Int -> ParserT l s e m (Maybe (Chunk s))
 popChunk n = state (\stream -> maybe (Nothing, stream) (first Just) (streamTakeN n stream))
 
 -- | Drop the next chunk of the given size, if any, and consume it.
--- May return a smaller size at end of stream, but never returns size 0.
+-- May return a smaller size at end of stream, but never returns size 0. (SAFE)
 dropChunk :: (Stream s, Monad m) => Int -> ParserT l s e m (Maybe Int)
 dropChunk n = state (\stream -> maybe (Nothing, stream) (first Just) (streamDropN n stream))
 
--- | Is this the end of the stream?
+-- | Is this the end of the stream? (SAFE)
 isEnd :: (Stream s, Monad m) => ParserT l s e m Bool
-isEnd = isNothing <$> peekToken
+isEnd = fmap isNothing peekToken
 
--- | Match the end of the stream or terminate the parser.
+-- | Match the end of the stream or terminate the parser. (UNSAFE)
 matchEnd :: (Stream s, Monad m) => ParserT l s e m ()
-matchEnd = peekToken >>= maybe (pure ()) (const empty)
+matchEnd = withToken (maybe (pure ()) (throwStreamError . RawErrorMatchEnd))
 
--- | Return the next token or terminate the parser at end of stream.
+-- | Return the next token or terminate the parser at end of stream. (UNSAFE)
 anyToken :: (Stream s, Monad m) => ParserT l s e m (Token s)
-anyToken = popToken >>= maybe empty pure
+anyToken = withToken (maybe (throwStreamError RawErrorAnyToken) pure)
 
 -- | Return the next chunk of the given size or terminate the parser at end of stream.
--- May return a smaller chunk at end of stream, but never returns an empty chunk.
+-- May return a smaller chunk at end of stream, but never returns an empty chunk. (UNSAFE)
 anyChunk :: (Stream s, Monad m) => Int -> ParserT l s e m (Chunk s)
-anyChunk n = popChunk n >>= maybe empty pure
+anyChunk n = withChunk n (maybe (throwStreamError RawErrorAnyChunk) pure)
 
--- | Match the next token with the given predicate or terminate the parser at predicate false or end of stream.
-satisfyToken :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT l s e m (Token s)
-satisfyToken p = do
-  m <- popToken
-  case m of
-    Just c | p c -> pure c
-    _ -> empty
+-- | Match the next token with the given predicate or terminate the parser at predicate false or end of stream. (UNSAFE)
+satisfyToken :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m (Token s)
+satisfyToken ml pcate = withToken $ \mu ->
+  case mu of
+    Just u | pcate u -> pure u
+    _ -> throwStreamError (RawErrorSatisfyToken ml mu)
 
 -- | Folds over a stream of tokens while the boolean value is true.
--- Always succeeds, even at end of stream. Only consumes greediest match.
+-- Always succeeds, even at end of stream. Only consumes greediest match. (SAFE)
 foldTokensWhile :: (Stream s, Monad m) => (Token s -> x -> (Bool, x)) -> x -> ParserT l s e m x
 foldTokensWhile processNext = go where
   go !x = do
@@ -90,37 +100,47 @@ foldTokensWhile processNext = go where
           else pure x
 
 -- | Take tokens into a chunk while they satisfy the given predicate.
--- Always succeeds, even at end of stream. May return an empty chunk. Only yields greediest match.
+-- Always succeeds, even at end of stream. May return an empty chunk. Only yields greediest match. (SAFE)
 takeTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT l s e m (Chunk s)
 takeTokensWhile = state . streamTakeWhile
 
 -- | Take tokens into a chunk while they satisfy the given predicate.
 -- Only succeeds if 1 or more tokens are taken, so it never returns an empty chunk.
-takeTokensWhile1 :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT l s e m (Chunk s)
-takeTokensWhile1 pcate = takeTokensWhile pcate >>= \c -> if chunkEmpty c then empty else pure c
+-- Also takes an optional label to describe the predicate. (UNSAFE)
+takeTokensWhile1 :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m (Chunk s)
+takeTokensWhile1 ml pcate = markWithStateParser (streamTakeWhile pcate) $ \j ->
+  if chunkEmpty j
+    then do
+      mu <- peekToken
+      throwStreamError (RawErrorTakeTokensWhile1 ml mu)
+    else pure j
 
 -- | Drop tokens and return chunk size while they satisfy the given predicate.
--- Always succeeds, even at end of stream. May return empty chunk size 0. Only drops greediest match.
+-- Always succeeds, even at end of stream. May return empty chunk size 0. Only drops greediest match. (SAFE)
 dropTokensWhile :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT l s e m Int
 dropTokensWhile = state . streamDropWhile
 
 -- | Drop tokens and return chunk size while they satisfy the given predicate.
 -- Only succeeds if 1 or more tokens are dropped.
-dropTokensWhile1 :: (Stream s, Monad m) => (Token s -> Bool) -> ParserT l s e m Int
-dropTokensWhile1 pcate = dropTokensWhile pcate >>= \s -> if s == 0 then empty else pure s
+-- Also takes an optional label to describe the predicate. (UNSAFE)
+dropTokensWhile1 :: (Stream s, Monad m) => Maybe (CompoundLabel l) -> (Token s -> Bool) -> ParserT l s e m Int
+dropTokensWhile1 ml pcate = markWithStateParser (streamDropWhile pcate) $ \s ->
+  if s == 0
+    then do
+      mu <- peekToken
+      throwStreamError (RawErrorDropTokensWhile1 ml mu)
+    else pure s
 
--- | Match token with equality or terminate the parser at inequality or end of stream.
+-- | Match token with equality or terminate the parser at inequality or end of stream. (UNSAFE)
 matchToken :: (Stream s, Monad m, Eq (Token s)) => Token s -> ParserT l s e m (Token s)
-matchToken t = do
-  mu <- popToken
+matchToken t = withToken $ \mu ->
   case mu of
     Just u | t == u -> pure u
-    _ -> empty
+    _ -> throwStreamError (RawErrorMatchToken t mu)
 
--- | Match chunk with equality or terminate the parser at inequality or end of stream.
+-- | Match chunk with equality or terminate the parser at inequality or end of stream. (UNSAFE)
 matchChunk :: (Stream s, Monad m, Eq (Chunk s)) => Chunk s -> ParserT l s e m (Chunk s)
-matchChunk k = do
-  mj <- popChunk (chunkLength k)
+matchChunk k = withChunk (chunkLength k) $ \mj ->
   case mj of
     Just j | k == j -> pure j
-    _ -> empty
+    _ -> throwStreamError (RawErrorMatchChunk k mj)

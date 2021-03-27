@@ -3,24 +3,21 @@
 module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
-  , JsonContext (..)
+  , JsonLabel (..)
   , JsonParser
   , jsonParser
   , recJsonParser
   ) where
 
 import Control.Monad (void)
-import Data.Foldable (toList)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import SimpleParser.Chunked (TextualChunked (..))
-import SimpleParser.Common (betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
-                            spaceParser)
--- import SimpleParser.Experimental.Assert (assertMatchChunk, assertMatchToken)
+import SimpleParser.Common (betweenParser, escapedStringParser, exclusiveParser, lexemeParser, scientificParser,
+                            sepByParser, spaceParser)
 import SimpleParser.Input (matchChunk, matchToken)
-import SimpleParser.Labels (localPushLabel)
-import SimpleParser.Parser (ParserT, andAllParser, isolateParser)
+import SimpleParser.Parser (ParserT)
 import SimpleParser.Stream (Stream (..), TextualStream)
 
 data JsonF a =
@@ -34,15 +31,11 @@ data JsonF a =
 
 newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
 
-data JsonContext =
-    JsonContextBranch !Text
-  | JsonContextLabel !Text
+newtype JsonLabel =
+    JsonLabelBranch Text
   deriving (Eq, Show)
 
-type JsonParser l s e m = (l ~ JsonContext, TextualStream s, Eq (Chunk s), Monad m)
-
-exclusiveParser :: (Foldable f, Monad m) => f (l, ParserT l s e m a) -> ParserT l s e m a
-exclusiveParser = isolateParser . andAllParser . fmap (uncurry localPushLabel) . toList
+type JsonParser l s e m = (l ~ JsonLabel, TextualStream s, Eq (Chunk s), Monad m)
 
 jsonParser :: JsonParser l s e m => ParserT l s e m Json
 jsonParser = let p = fmap Json (recJsonParser p) in p
@@ -51,12 +44,12 @@ recJsonParser :: JsonParser l s e m => ParserT l s e m a -> ParserT l s e m (Jso
 recJsonParser root = exclusiveParser opts where
   pairP = objectPairP root
   opts =
-    [ (JsonContextBranch "object", objectP pairP)
-    , (JsonContextBranch "array" , arrayP root)
-    , (JsonContextBranch "string", stringP)
-    , (JsonContextBranch "num", numP)
-    , (JsonContextBranch "bool", boolP)
-    , (JsonContextBranch "null", nullP)
+    [ (JsonLabelBranch "object", objectP pairP)
+    , (JsonLabelBranch "array" , arrayP root)
+    , (JsonLabelBranch "string", stringP)
+    , (JsonLabelBranch "num", numP)
+    , (JsonLabelBranch "bool", boolP)
+    , (JsonLabelBranch "null", nullP)
     ]
 
 spaceP :: JsonParser l s e m => ParserT l s e m ()
@@ -96,8 +89,8 @@ nullP = JsonNull <$ nullTokP
 
 boolP :: JsonParser l s e m => ParserT l s e m (JsonF a)
 boolP = exclusiveParser
-  [ (JsonContextBranch "true", JsonBool True <$ trueTokP)
-  , (JsonContextBranch "false", JsonBool False <$ falseTokP)
+  [ (JsonLabelBranch "true", JsonBool True <$ trueTokP)
+  , (JsonLabelBranch "false", JsonBool False <$ falseTokP)
   ]
 
 numP :: JsonParser l s e m => ParserT l s e m (JsonF a)
