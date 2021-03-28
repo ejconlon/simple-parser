@@ -14,7 +14,7 @@ module SimpleParser.Result
   , onParseResult
   ) where
 
-import SimpleParser.Labels (LabelStack)
+import SimpleParser.Labels (HasLabelStack (..), LabelStack)
 import SimpleParser.Stream (Stream (..))
 
 data RawError label chunk token =
@@ -53,6 +53,10 @@ data ParseError l s e = ParseError
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseError l s e)
+
+instance HasLabelStack l (ParseError l s e) where
+  viewLabelStack = peLabels
+  setLabelStack ls pe = pe { peLabels = ls }
 
 -- | Strict 'Either' for parse results.
 data ParseValue l s e a =

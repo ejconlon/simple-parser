@@ -5,11 +5,10 @@ module SimpleParser.Stream
   , TextualStream
   , defaultStreamDropN
   , defaultStreamDropWhile
-  , StreamWithPos (..)
   , OffsetStream (..)
   , newOffsetStream
-  , PosStream (..)
-  , newPosStream
+  , LinePosStream (..)
+  , newLinePosStream
   , Span (..)
   ) where
 
@@ -27,6 +26,9 @@ import SimpleParser.Chunked (Chunked (..), TextualChunked (..))
 class Chunked (Chunk s) (Token s) => Stream s where
   type family Chunk s :: Type
   type family Token s :: Type
+  type family Pos s :: Type
+
+  streamViewPos :: s -> Pos s
 
   streamTake1 :: s -> Maybe (Token s, s)
   streamTakeN :: Int -> s -> Maybe (Chunk s, s)
@@ -49,7 +51,9 @@ type TextualStream s = (Stream s, Token s ~ Char, TextualChunked (Chunk s))
 instance Stream [a] where
   type instance Chunk [a] = [a]
   type instance Token [a] = a
+  type instance Pos [a] = ()
 
+  streamViewPos = const ()
   streamTake1 = unconsChunk
   streamTakeN n s
     | n <= 0 = Just ([], s)
@@ -60,7 +64,9 @@ instance Stream [a] where
 instance Stream (Seq a) where
   type instance Chunk (Seq a) = Seq a
   type instance Token (Seq a) = a
+  type instance Pos (Seq a) = ()
 
+  streamViewPos = const ()
   streamTake1 = unconsChunk
   streamTakeN n s
     | n <= 0 = Just (Seq.empty, s)
@@ -73,7 +79,9 @@ instance Stream (Seq a) where
 instance Stream Text where
   type instance Chunk Text = Text
   type instance Token Text = Char
+  type instance Pos Text = ()
 
+  streamViewPos = const ()
   streamTake1 = T.uncons
   streamTakeN n s
     | n <= 0 = Just (T.empty, s)
@@ -90,7 +98,9 @@ data OffsetStream s = OffsetStream
 instance Stream s => Stream (OffsetStream s) where
   type instance Chunk (OffsetStream s) = Chunk s
   type instance Token (OffsetStream s) = Token s
+  type instance Pos (OffsetStream s) = Int
 
+  streamViewPos (OffsetStream o _) = o
   streamTake1 (OffsetStream o s) = fmap (second (OffsetStream (succ o))) (streamTake1 s)
   streamTakeN n (OffsetStream o s) = fmap go (streamTakeN n s) where
     go (a, b) = (a, OffsetStream (o + chunkLength a) b)
@@ -106,61 +116,48 @@ instance Stream s => Stream (OffsetStream s) where
 newOffsetStream :: s -> OffsetStream s
 newOffsetStream = OffsetStream 0
 
--- | A stream that has maintains a short, meaningful position.
-class (Ord p, Stream s) => StreamWithPos p s | s -> p where
-  viewStreamPos :: s -> p
-  setStreamPos :: p -> s -> s
-  overStreamPos :: (p -> p) -> s -> s
-  overStreamPos f s = setStreamPos (f (viewStreamPos s)) s
-
-instance Stream s => StreamWithPos Int (OffsetStream s) where
-  viewStreamPos = osOffset
-  setStreamPos p s = s { osOffset = p }
-
 -- | A 0-based line/col position in a character-based stream.
-data Pos = Pos
-  { posOffset :: !Int
-  , posLine :: !Int
-  , posCol :: !Int
+data LinePos = LinePos
+  { lpOffset :: !Int
+  , lpLine :: !Int
+  , lpCol :: !Int
   } deriving (Eq, Show, Ord)
 
 -- | The canonical initial position.
-initPos :: Pos
-initPos = Pos 0 0 0
+initLinePos :: LinePos
+initLinePos = LinePos 0 0 0
 
-incrPosToken :: Pos -> Char -> Pos
-incrPosToken (Pos o l c) z
-  | z == '\n' = Pos (succ o) (succ l) 0
-  | otherwise = Pos (succ o) l (succ c)
+incrLinePosToken :: LinePos -> Char -> LinePos
+incrLinePosToken (LinePos o l c) z
+  | z == '\n' = LinePos (succ o) (succ l) 0
+  | otherwise = LinePos (succ o) l (succ c)
 
-incrPosChunk :: Pos -> [Char] -> Pos
-incrPosChunk = foldl' incrPosToken
+incrLinePosChunk :: LinePos -> [Char] -> LinePos
+incrLinePosChunk = foldl' incrLinePosToken
 
 -- | Stream wrapper that maintains a line/col position.
-data PosStream s = PosStream
-  { psPos :: !Pos
-  , psState :: !s
+data LinePosStream s = LinePosStream
+  { lpsLinePos :: !LinePos
+  , lpsState :: !s
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
-instance (Stream s, Token s ~ Char) => Stream (PosStream s) where
-  type instance Chunk (PosStream s) = Chunk s
-  type instance Token (PosStream s) = Token s
+instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
+  type instance Chunk (LinePosStream s) = Chunk s
+  type instance Token (LinePosStream s) = Token s
+  type instance Pos (LinePosStream s) = LinePos
 
-  streamTake1 (PosStream p s) = fmap (\(a, b) -> (a, PosStream (incrPosToken p a) b)) (streamTake1 s)
-  streamTakeN n (PosStream p s) = fmap go (streamTakeN n s) where
-    go (a, b) = (a, PosStream (incrPosChunk p (chunkToTokens a)) b)
-  streamTakeWhile pcate (PosStream p s) =
+  streamViewPos (LinePosStream p _) = p
+  streamTake1 (LinePosStream p s) = fmap (\(a, b) -> (a, LinePosStream (incrLinePosToken p a) b)) (streamTake1 s)
+  streamTakeN n (LinePosStream p s) = fmap go (streamTakeN n s) where
+    go (a, b) = (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
+  streamTakeWhile pcate (LinePosStream p s) =
     let (a, b) = streamTakeWhile pcate s
-    in (a, PosStream (incrPosChunk p (chunkToTokens a)) b)
+    in (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
 
   -- Drops can't be specialized because we need to examine each character for newlines.
 
-instance (Stream s, Token s ~ Char) => StreamWithPos Pos (PosStream s) where
-  viewStreamPos = psPos
-  setStreamPos p s = s { psPos = p }
-
-newPosStream :: s -> PosStream s
-newPosStream = PosStream initPos
+newLinePosStream :: s -> LinePosStream s
+newLinePosStream = LinePosStream initLinePos
 
 -- | A range between two positions.
 data Span p = Span
