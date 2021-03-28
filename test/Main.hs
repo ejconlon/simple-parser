@@ -385,21 +385,9 @@ test_asum =
             , anyTokErrRes (OffsetStream 0 "")
             , matchTokErrRes (OffsetStream 0 "") 'x' Nothing
             ]
-        , ParserCase "first" parser "hi"
-            [ sucRes state 'h'
-            , sucRes state 'y'
-            , matchTokErrRes (OffsetStream 0 "hi") 'x' (Just 'h')
-            ]
-        , ParserCase "middle" parser "zi"
-            [ matchTokErrRes (OffsetStream 0 "zi") 'h' (Just 'z')
-            , sucRes state 'y'
-            , matchTokErrRes (OffsetStream 0 "zi") 'x' (Just 'z')
-            ]
-        , ParserCase "last" parser "xi"
-            [ matchTokErrRes (OffsetStream 0 "xi") 'h' (Just 'x')
-            , sucRes state 'y'
-            , sucRes state 'x'
-            ]
+        , ParserCase "first" parser "hi" [sucRes state 'h']
+        , ParserCase "middle" parser "zi" [sucRes state 'y']
+        , ParserCase "last" parser "xi" [sucRes state 'y']
         ]
   in fmap testParserCase cases
 
@@ -425,7 +413,7 @@ test_default =
 test_bind_multi_pre :: [TestTree]
 test_bind_multi_pre =
   let state = OffsetStream 1 "i"
-      parser = asum ['h' <$ anyToken, matchToken 'x'] >>= \c -> pure [c, c]
+      parser = andParser ('h' <$ anyToken) (matchToken 'x') >>= \c -> pure [c, c]
       cases =
         [ ParserCase "empty" parser ""
             [ anyTokErrRes (OffsetStream 0 "")
@@ -446,7 +434,7 @@ test_bind_multi_post :: [TestTree]
 test_bind_multi_post =
   let state1 = OffsetStream 1 "i"
       state2 = OffsetStream 2 ""
-      parser = anyToken >>= \x -> asum [pure x, matchToken 'i']
+      parser = anyToken >>= \x -> andParser (pure x) (matchToken 'i')
       cases =
         [ ParserCase "empty" parser "" [anyTokErrRes (OffsetStream 0 "")]
         , ParserCase "first" parser "hi" [sucRes state1 'h', sucRes state2 'i']
@@ -498,7 +486,7 @@ test_throw_mixed :: [TestTree]
 test_throw_mixed =
   let state = OffsetStream 0 "hi"
       err = Error "boo"
-      parser = asum [throwError err, pure 1 :: TestParser Int]
+      parser = andParser (throwError err) (pure 1) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [custErrRes state state err, sucRes state 1]
         ]
@@ -508,7 +496,7 @@ test_throw_mixed_flip :: [TestTree]
 test_throw_mixed_flip =
   let state = OffsetStream 0 "hi"
       err = Error "boo"
-      parser = asum [pure 1 :: TestParser Int, throwError err]
+      parser = andParser (pure 1) (throwError err) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes state 1, custErrRes state state err]
         ]
@@ -518,7 +506,7 @@ test_catch :: [TestTree]
 test_catch =
   let state = OffsetStream 0 "hi"
       err = Error "boo"
-      parser = catchError (asum [throwError err, pure 1]) (\(Error m) -> pure (if m == "boo" then 2 else 3)) :: TestParser Int
+      parser = catchError (andParser (throwError err) (pure 1)) (\(Error m) -> pure (if m == "boo" then 2 else 3)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes state 2, sucRes state 1]
         ]
@@ -538,7 +526,7 @@ test_catch_recur =
 test_suppress_success :: [TestTree]
 test_suppress_success =
   let state = OffsetStream 0 "hi"
-      parser = suppressParser (asum [pure 1, pure 2]) :: TestParser Int
+      parser = suppressParser (andParser (pure 1) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes state 1, sucRes state 2]
         ]
@@ -547,7 +535,7 @@ test_suppress_success =
 test_suppress_fail_first :: [TestTree]
 test_suppress_fail_first =
   let err = Error "boo"
-      parser = suppressParser (asum [throwError err, pure 2]) :: TestParser Int
+      parser = suppressParser (andParser (throwError err) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 2]
         ]
@@ -556,7 +544,7 @@ test_suppress_fail_first =
 test_suppress_fail_second :: [TestTree]
 test_suppress_fail_second =
   let err = Error "boo"
-      parser = suppressParser (asum [pure 1, throwError err]) :: TestParser Int
+      parser = suppressParser (andParser (pure 1) (throwError err)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 1]
         ]
@@ -567,7 +555,7 @@ test_suppress_fail_both =
   let state = OffsetStream 0 "hi"
       err1 = Error "boo1"
       err2 = Error "boo2"
-      parser = suppressParser (asum [throwError err1, throwError err2]) :: TestParser Int
+      parser = suppressParser (andParser (throwError err1) (throwError err2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [custErrRes state state err1, custErrRes state state err2]
         ]
@@ -576,7 +564,7 @@ test_suppress_fail_both =
 test_isolate_success :: [TestTree]
 test_isolate_success =
   let state = OffsetStream 0 "hi"
-      parser = isolateParser (asum [pure 1, pure 2]) :: TestParser Int
+      parser = isolateParser (andParser (pure 1) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes state 1]
         ]
@@ -585,7 +573,7 @@ test_isolate_success =
 test_isolate_fail_first :: [TestTree]
 test_isolate_fail_first =
   let err = Error "boo"
-      parser = isolateParser (asum [throwError err, pure 2]) :: TestParser Int
+      parser = isolateParser (andParser (throwError err) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 2]
         ]
@@ -594,7 +582,7 @@ test_isolate_fail_first =
 test_isolate_fail_second :: [TestTree]
 test_isolate_fail_second =
   let err = Error "boo"
-      parser = isolateParser (asum [pure 1, throwError err]) :: TestParser Int
+      parser = isolateParser (andParser (pure 1) (throwError err)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 1]
         ]
@@ -605,7 +593,7 @@ test_isolate_fail_both =
   let state = OffsetStream 0 "hi"
       err1 = Error "boo1"
       err2 = Error "boo2"
-      parser = isolateParser (asum [throwError err1, throwError err2]) :: TestParser Int
+      parser = isolateParser (andParser (throwError err1) (throwError err2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [custErrRes state state err1, custErrRes state state err2]
         ]
@@ -614,7 +602,7 @@ test_isolate_fail_both =
 test_silence_success :: [TestTree]
 test_silence_success =
   let state = OffsetStream 0 "hi"
-      parser = silenceParser (asum [pure 1, pure 2]) :: TestParser Int
+      parser = silenceParser (andParser (pure 1) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes state 1, sucRes state 2]
         ]
@@ -623,7 +611,7 @@ test_silence_success =
 test_silence_fail_first :: [TestTree]
 test_silence_fail_first =
   let err = Error "boo"
-      parser = silenceParser (asum [throwError err, pure 2]) :: TestParser Int
+      parser = silenceParser (andParser (throwError err) (pure 2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 2]
         ]
@@ -632,7 +620,7 @@ test_silence_fail_first =
 test_silence_fail_second :: [TestTree]
 test_silence_fail_second =
   let err = Error "boo"
-      parser = silenceParser (asum [pure 1, throwError err]) :: TestParser Int
+      parser = silenceParser (andParser (pure 1) (throwError err)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" [sucRes (OffsetStream 0 "hi") 1]
         ]
@@ -642,7 +630,7 @@ test_silence_fail_both :: [TestTree]
 test_silence_fail_both =
   let err1 = Error "boo1"
       err2 = Error "boo2"
-      parser = silenceParser (asum [throwError err1, throwError err2]) :: TestParser Int
+      parser = silenceParser (andParser (throwError err1) (throwError err2)) :: TestParser Int
       cases =
         [ ParserCase "non-empty" parser "hi" []
         ]

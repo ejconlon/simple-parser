@@ -3,6 +3,7 @@ module SimpleParser.Parser
   ( ParserT (..)
   , Parser
   , runParser
+  , emptyParser
   , catchJustParser
   , filterParser
   , reflectParser
@@ -69,8 +70,10 @@ instance Monad m => Monad (ParserT l s e m) where
         ParseValueSuccess a -> runParserT (f a) ls t
 
 instance Monad m => Alternative (ParserT l s e m) where
-  empty = ParserT (\_ _ -> empty)
-  (<|>) = andParser
+  empty = emptyParser
+  (<|>) = orParser
+  some = greedyPlusParser
+  many = greedyStarParser
 
 instance Monad m => MonadPlus (ParserT l s e m) where
   mzero = empty
@@ -106,6 +109,10 @@ instance MFunctor (ParserT l s e) where
 -- | Runs a non-effectful parser from an inital state and collects all results.
 runParser :: Parser l s e a -> LabelStack l -> s -> [ParseResult l s e a]
 runParser parser ls s = runIdentity (ListT.toList (runParserT parser ls s))
+
+-- | The empty parser.
+emptyParser :: Applicative m => ParserT l s e m a
+emptyParser = ParserT (\_ _ -> ListT (pure Nothing))
 
 -- | Catch only a subset of errors. This preserves label information vs rethrowing.
 catchJustParser :: Monad m => (e -> Maybe a) -> ParserT l s e m a -> ParserT l s e m a
