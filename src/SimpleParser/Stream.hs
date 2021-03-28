@@ -5,8 +5,12 @@ module SimpleParser.Stream
   , TextualStream
   , defaultStreamDropN
   , defaultStreamDropWhile
+  , Offset (..)
   , OffsetStream (..)
   , newOffsetStream
+  , Line (..)
+  , Col (..)
+  , LinePos (..)
   , LinePosStream (..)
   , newLinePosStream
   , Span (..)
@@ -89,38 +93,47 @@ instance Stream Text where
     | otherwise = Just (T.splitAt n s)
   streamTakeWhile = T.span
 
+newtype Offset = Offset { unOffset :: Int }
+  deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
+
 -- | Stream wrapper that maintains an offset position.
 data OffsetStream s = OffsetStream
-  { osOffset :: !Int
+  { osOffset :: !Offset
   , osState :: !s
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance Stream s => Stream (OffsetStream s) where
   type instance Chunk (OffsetStream s) = Chunk s
   type instance Token (OffsetStream s) = Token s
-  type instance Pos (OffsetStream s) = Int
+  type instance Pos (OffsetStream s) = Offset
 
   streamViewPos (OffsetStream o _) = o
   streamTake1 (OffsetStream o s) = fmap (second (OffsetStream (succ o))) (streamTake1 s)
-  streamTakeN n (OffsetStream o s) = fmap go (streamTakeN n s) where
-    go (a, b) = (a, OffsetStream (o + chunkLength a) b)
-  streamTakeWhile pcate (OffsetStream o s) =
+  streamTakeN n (OffsetStream (Offset x) s) = fmap go (streamTakeN n s) where
+    go (a, b) = (a, OffsetStream (Offset (x + chunkLength a)) b)
+  streamTakeWhile pcate (OffsetStream (Offset x) s) =
     let (a, b) = streamTakeWhile pcate s
-    in (a, OffsetStream (o + chunkLength a) b)
-  streamDropN n (OffsetStream o s) = fmap go (streamDropN n s) where
-    go (m, b) = (m, OffsetStream (o + m) b)
-  streamDropWhile pcate (OffsetStream o s) =
+    in (a, OffsetStream (Offset (x + chunkLength a)) b)
+  streamDropN n (OffsetStream (Offset x) s) = fmap go (streamDropN n s) where
+    go (m, b) = (m, OffsetStream (Offset (x + m)) b)
+  streamDropWhile pcate (OffsetStream (Offset x) s) =
     let (m, b) = streamDropWhile pcate s
-    in (m, OffsetStream (o + m) b)
+    in (m, OffsetStream (Offset (x + m)) b)
 
 newOffsetStream :: s -> OffsetStream s
 newOffsetStream = OffsetStream 0
 
+newtype Line = Line { unLine :: Int }
+  deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
+
+newtype Col = Col { unCol :: Int }
+  deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
+
 -- | A 0-based line/col position in a character-based stream.
 data LinePos = LinePos
-  { lpOffset :: !Int
-  , lpLine :: !Int
-  , lpCol :: !Int
+  { lpOffset :: !Offset
+  , lpLine :: !Line
+  , lpCol :: !Col
   } deriving (Eq, Show, Ord)
 
 -- | The canonical initial position.

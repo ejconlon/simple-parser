@@ -9,6 +9,8 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
+import Text.Builder (Builder)
+import qualified Text.Builder as TB
 
 -- | 'Chunked' captures the basic relationship between tokens and chunks of them.
 -- Basically, these things behave like lists, sequences, text, etc.
@@ -28,7 +30,9 @@ class Monoid chunk => Chunked chunk token | chunk -> token where
 
 -- | Captures textual streams.
 class Chunked chunk Char => TextualChunked chunk where
+  buildChunk :: chunk -> Builder
   packChunk :: chunk -> Text
+  packChunk = TB.run . buildChunk
   unpackChunk :: Text -> chunk
 
 -- TODO(ejconlon) Add instances for Strict BS, Lazy BS, and Lazy Text
@@ -43,6 +47,7 @@ instance Chunked [a] a where
   chunkEmpty = null
 
 instance (a ~ Char) => TextualChunked [a] where
+  buildChunk = TB.string
   packChunk = T.pack
   unpackChunk = T.unpack
 
@@ -60,6 +65,7 @@ instance Chunked (Seq a) a where
   revTokensToChunk = foldr (flip (:|>)) Empty
 
 instance (a ~ Char) => TextualChunked (Seq a) where
+  buildChunk = TB.string . toList
   packChunk = T.pack . toList
   unpackChunk = Seq.fromList . T.unpack
 
@@ -73,5 +79,6 @@ instance Chunked Text Char where
   chunkEmpty = T.null
 
 instance TextualChunked Text where
+  buildChunk = TB.text
   packChunk = id
   unpackChunk = id

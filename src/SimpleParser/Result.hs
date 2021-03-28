@@ -6,6 +6,7 @@ module SimpleParser.Result
   , StreamError (..)
   , CompoundError (..)
   , ParseError (..)
+  , AnchoredParseError (..)
   , ParseResult (..)
   , ParseValue (..)
   , onParseValue
@@ -57,6 +58,14 @@ deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Sh
 instance HasLabelStack l (ParseError l s e) where
   viewLabelStack = peLabels
   setLabelStack ls pe = pe { peLabels = ls }
+
+data AnchoredParseError l s e = AnchoredParseError
+  { apeStartState :: !s
+  , apeParseError :: !(ParseError l s e)
+  }
+
+deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (AnchoredParseError l s e)
+deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (AnchoredParseError l s e)
 
 -- | Strict 'Either' for parse results.
 data ParseValue l s e a =

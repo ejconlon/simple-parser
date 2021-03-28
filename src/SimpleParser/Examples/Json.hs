@@ -4,7 +4,8 @@ module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
   , JsonLabel (..)
-  , JsonParser
+  , JsonParserC
+  , JsonParserM
   , jsonParser
   , recJsonParser
   ) where
@@ -13,12 +14,15 @@ import Control.Monad (void)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import Data.Void (Void)
 import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, escapedStringParser, exclusiveParser,
                             lexemeParser, scientificParser, sepByParser, spaceParser)
+import SimpleParser.Explain (ExplainLabel (..))
 import SimpleParser.Input (matchChunk, matchToken)
-import SimpleParser.Parser (ParserT)
+import SimpleParser.Parser (Parser)
 import SimpleParser.Stream (Stream (..), TextualStream)
+import qualified Text.Builder as TB
 
 data JsonF a =
     JsonObject !(Seq (Text, a))
@@ -36,15 +40,23 @@ data JsonLabel =
   | JsonLabelEmbedText !TextLabel
   deriving (Eq, Show)
 
+instance ExplainLabel JsonLabel where
+  explainLabel jl =
+    case jl of
+      JsonLabelBranch b -> "branch " <> TB.text b
+      JsonLabelEmbedText tl -> explainLabel tl
+
 instance EmbedTextLabel JsonLabel where
   embedTextLabel = JsonLabelEmbedText
 
-type JsonParser l s e m = (l ~ JsonLabel, TextualStream s, Eq (Chunk s), Monad m)
+type JsonParserC s = (TextualStream s, Eq (Chunk s))
 
-jsonParser :: JsonParser l s e m => ParserT l s e m Json
+type JsonParserM s a = Parser JsonLabel s Void a
+
+jsonParser :: JsonParserC s => JsonParserM s Json
 jsonParser = let p = fmap Json (recJsonParser p) in p
 
-recJsonParser :: JsonParser l s e m => ParserT l s e m a -> ParserT l s e m (JsonF a)
+recJsonParser :: JsonParserC s => JsonParserM s a -> JsonParserM s (JsonF a)
 recJsonParser root = exclusiveParser opts where
   pairP = objectPairP root
   opts =
@@ -56,16 +68,16 @@ recJsonParser root = exclusiveParser opts where
     , (JsonLabelBranch "null", nullP)
     ]
 
-spaceP :: JsonParser l s e m => ParserT l s e m ()
+spaceP :: JsonParserC s => JsonParserM s ()
 spaceP = spaceParser
 
-tokL :: JsonParser l s e m => Char -> ParserT l s e m ()
+tokL :: JsonParserC s => Char -> JsonParserM s ()
 tokL c = lexemeParser spaceP (void (matchToken c))
 
-chunkL :: JsonParser l s e m => Text -> ParserT l s e m ()
+chunkL :: JsonParserC s => Text -> JsonParserM s ()
 chunkL cs = lexemeParser spaceP (void (matchChunk (unpackChunk cs)))
 
-openBraceP, closeBraceP, commaP, colonP, openBracketP, closeBracketP, closeQuoteP :: JsonParser l s e m => ParserT l s e m ()
+openBraceP, closeBraceP, commaP, colonP, openBracketP, closeBracketP, closeQuoteP :: JsonParserC s => JsonParserM s ()
 openBraceP = tokL '{'
 closeBraceP = tokL '}'
 commaP = tokL ','
@@ -74,41 +86,41 @@ openBracketP = tokL '['
 closeBracketP = tokL ']'
 closeQuoteP = tokL '"'
 
-openQuoteP :: JsonParser l s e m => ParserT l s e m ()
+openQuoteP :: JsonParserC s => JsonParserM s ()
 openQuoteP = void (matchToken '"')
 
-nullTokP, trueTokP, falseTokP :: JsonParser l s e m => ParserT l s e m ()
+nullTokP, trueTokP, falseTokP :: JsonParserC s => JsonParserM s ()
 nullTokP = chunkL "null"
 trueTokP = chunkL "true"
 falseTokP = chunkL "false"
 
-rawStringP :: JsonParser l s e m => ParserT l s e m Text
+rawStringP :: JsonParserC s => JsonParserM s Text
 rawStringP = fmap packChunk (escapedStringParser '"')
 
-stringP :: JsonParser l s e m => ParserT l s e m (JsonF a)
+stringP :: JsonParserC s => JsonParserM s (JsonF a)
 stringP = fmap JsonString rawStringP
 
-nullP :: JsonParser l s e m => ParserT l s e m (JsonF a)
+nullP :: JsonParserC s => JsonParserM s (JsonF a)
 nullP = JsonNull <$ nullTokP
 
-boolP :: JsonParser l s e m => ParserT l s e m (JsonF a)
+boolP :: JsonParserC s => JsonParserM s (JsonF a)
 boolP = exclusiveParser
   [ (JsonLabelBranch "true", JsonBool True <$ trueTokP)
   , (JsonLabelBranch "false", JsonBool False <$ falseTokP)
   ]
 
-numP :: JsonParser l s e m => ParserT l s e m (JsonF a)
+numP :: JsonParserC s => JsonParserM s (JsonF a)
 numP = fmap JsonNum scientificParser
 
-objectPairP :: JsonParser l s e m => ParserT l s e m a -> ParserT l s e m (Text, a)
+objectPairP :: JsonParserC s => JsonParserM s a -> JsonParserM s (Text, a)
 objectPairP root = do
   name <- rawStringP
   colonP
   value <- root
   pure (name, value)
 
-objectP :: JsonParser l s e m => ParserT l s e m (Text, a) -> ParserT l s e m (JsonF a)
+objectP :: JsonParserC s => JsonParserM s (Text, a) -> JsonParserM s (JsonF a)
 objectP pairP = betweenParser openBraceP closeBraceP (fmap JsonObject (sepByParser pairP commaP))
 
-arrayP :: JsonParser l s e m => ParserT l s e m a -> ParserT l s e m (JsonF a)
+arrayP :: JsonParserC s => JsonParserM s a -> JsonParserM s (JsonF a)
 arrayP root = betweenParser openBracketP closeBracketP (fmap JsonArray (sepByParser root commaP))

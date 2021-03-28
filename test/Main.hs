@@ -11,9 +11,8 @@ import qualified Data.Sequence as Seq
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void (Void)
 import SimpleParser
-import SimpleParser.Examples.Json (Json (..), JsonF (..), JsonLabel, jsonParser)
+import SimpleParser.Examples.Json (Json (..), JsonF (..), jsonParser)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -59,9 +58,9 @@ anyChunkErrRes :: TestState -> TestResult a
 anyChunkErrRes s = stmErrRes s s RawErrorAnyChunk
 
 fwd :: Int -> TestState -> TestState
-fwd n (OffsetStream i t) =
+fwd n (OffsetStream (Offset i) t) =
   let m = min n (T.length t)
-  in OffsetStream (i + m) (T.drop m t)
+  in OffsetStream (Offset (i + m)) (T.drop m t)
 
 matchTokErrRes :: TestState -> Char -> Maybe Char -> TestResult a
 matchTokErrRes s x my = stmErrRes s (fwd 1 s) (RawErrorMatchToken x my)
@@ -725,20 +724,20 @@ test_drop_while_1 =
         ]
   in fmap testParserCase cases
 
-type JsonBundle = Either () (Maybe Json)
+type JsonResult = Either () (Maybe Json)
 
-testJsonCase :: TestName -> Text -> JsonBundle -> TestTree
+testJsonCase :: TestName -> Text -> JsonResult -> TestTree
 testJsonCase name str expected = testCase ("json " <> name) $ do
   let actual = parseJson str
   actual @?= expected
 
-testJsonTrees :: [(TestName, Text, JsonBundle)] -> [TestTree]
+testJsonTrees :: [(TestName, Text, JsonResult)] -> [TestTree]
 testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
 
-parseJson :: Text -> JsonBundle
+parseJson :: Text -> JsonResult
 parseJson str =
-  let p = jsonParser <* matchEnd :: Parser JsonLabel Text Void Json
-  in first (const ()) (runBundledParser p str)
+  let p = jsonParser <* matchEnd
+  in first (const ()) (performParser p str)
 
 test_json :: [TestTree]
 test_json =

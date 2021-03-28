@@ -2,3 +2,6 @@ resolver: lts-17.7
 
 packages:
 - .
+
+extra-deps:
+- errata-0.2.0.0

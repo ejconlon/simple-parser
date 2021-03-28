@@ -36,9 +36,9 @@ import SimpleParser.Stream (Span (..), Stream (..))
 
 -- | Enumeration of common labels in textual parsing.
 data TextLabel =
-    StreamLabelSpace
-  | StreamLabelHSpace
-  | StreamLabelDigit
+    TextLabelSpace
+  | TextLabelHSpace
+  | TextLabelDigit
   deriving (Eq, Show)
 
 class EmbedTextLabel l where
@@ -116,15 +116,15 @@ hspaceParser = void (dropTokensWhile isHSpace)
 
 -- | Consumes 1 or more space characters.
 spaceParser1 :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-spaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel StreamLabelSpace)) isSpace)
+spaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel TextLabelSpace)) isSpace)
 
 -- | Consumes 1 or more non-line-break space characters
 hspaceParser1 :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m ()
-hspaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel StreamLabelHSpace)) isHSpace)
+hspaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel TextLabelHSpace)) isHSpace)
 
 -- | Parses an integer in decimal representation (equivalent to Megaparsec's 'decimal').
 decimalParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m, Num a) => ParserT l s e m a
-decimalParser = fmap mkNum (takeTokensWhile1 (Just (embedTextLabel StreamLabelDigit)) isDigit) where
+decimalParser = fmap mkNum (takeTokensWhile1 (Just (embedTextLabel TextLabelDigit)) isDigit) where
   mkNum = foldl' step 0 . chunkToTokens
   step a c = a * 10 + fromIntegral (digitToInt c)
 
@@ -135,7 +135,7 @@ dotDecimalParser c' = do
   void (matchToken '.')
   let mkNum = foldl' step (SP c' 0) . chunkToTokens
       step (SP a e') c = SP (a * 10 + fromIntegral (digitToInt c)) (e' - 1)
-  fmap mkNum (takeTokensWhile1 (Just (embedTextLabel StreamLabelDigit)) isDigit)
+  fmap mkNum (takeTokensWhile1 (Just (embedTextLabel TextLabelDigit)) isDigit)
 
 exponentParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => Int -> ParserT l s e m Int
 exponentParser e' = do
