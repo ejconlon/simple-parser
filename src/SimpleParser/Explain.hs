@@ -43,7 +43,7 @@ instance ExplainLabel l => ExplainLabel (CompoundTextLabel l) where
 data ErrorExplanation = ErrorExplanation
   { eeReason :: !Builder
   , eeExpected :: !(Maybe Builder)
-  , eeActual :: !Builder
+  , eeActual :: !(Maybe Builder)
   }
 
 class ExplainError e where
@@ -52,43 +52,46 @@ class ExplainError e where
 instance ExplainError Void where
   explainError = absurd
 
+endMsg :: Builder
+endMsg = "end of stream"
+
 tokB :: Char -> Builder
 tokB t = "token '" <> TB.char t <> "'"
 
 mayTokB :: Maybe Char -> Builder
-mayTokB = maybe "end of stream" tokB
+mayTokB = maybe endMsg tokB
 
 chunkB :: TextualChunked chunk => chunk -> Builder
 chunkB k = "chunk \"" <> buildChunk k <> "\""
 
 mayChunkB :: TextualChunked chunk => Maybe chunk -> Builder
-mayChunkB = maybe "end of stream" chunkB
+mayChunkB = maybe endMsg chunkB
 
 instance (Token s ~ Char, TextualChunked (Chunk s), ExplainLabel l) => ExplainError (StreamError l s) where
   explainError (StreamError re) =
     case re of
       RawErrorMatchEnd actTok ->
-        ErrorExplanation "failed to match end of stream" (Just "end of stream") (tokB actTok)
+        ErrorExplanation "failed to match end of stream" (Just endMsg) (Just (tokB actTok))
       RawErrorAnyToken ->
-        ErrorExplanation "failed to match any token" (Just "any token") "end of stream"
+        ErrorExplanation "failed to match any token" (Just "any token") (Just endMsg)
       RawErrorAnyChunk ->
-        ErrorExplanation "failed to match any chunk" (Just "any chunk") "end of stream"
+        ErrorExplanation "failed to match any chunk" (Just "any chunk") (Just endMsg)
       RawErrorSatisfyToken mayLab mayActTok ->
-        ErrorExplanation "failed to satisfy token predicate" (fmap explainLabel mayLab) (mayTokB mayActTok)
+        ErrorExplanation "failed to satisfy token predicate" (fmap explainLabel mayLab) (Just (mayTokB mayActTok))
       RawErrorMatchToken expTok mayActTok ->
-        ErrorExplanation "failed to match token" (Just (tokB expTok)) (mayTokB mayActTok)
+        ErrorExplanation "failed to match token" (Just (tokB expTok)) (Just (mayTokB mayActTok))
       RawErrorMatchChunk expChunk mayActChunk ->
-        ErrorExplanation "failed to match chunk" (Just (chunkB expChunk)) (mayChunkB mayActChunk)
+        ErrorExplanation "failed to match chunk" (Just (chunkB expChunk)) (Just (mayChunkB mayActChunk))
       RawErrorTakeTokensWhile1 mayLab mayActTok ->
-        ErrorExplanation "failed to take 1 or more tokens" (fmap explainLabel mayLab) (mayTokB mayActTok)
+        ErrorExplanation "failed to take 1 or more tokens" (fmap explainLabel mayLab) (Just (mayTokB mayActTok))
       RawErrorDropTokensWhile1 mayLab mayActTok ->
-        ErrorExplanation "failed to drop 1 or more tokens" (fmap explainLabel mayLab) (mayTokB mayActTok)
+        ErrorExplanation "failed to drop 1 or more tokens" (fmap explainLabel mayLab) (Just (mayTokB mayActTok))
 
 instance (Token s ~ Char, TextualChunked (Chunk s), ExplainLabel l, ExplainError e) => ExplainError (CompoundError l s e) where
   explainError ce =
     case ce of
       CompoundErrorStream se -> explainError se
-      CompoundErrorFail msg -> ErrorExplanation "failed to parse" Nothing (TB.text msg)
+      CompoundErrorFail msg -> ErrorExplanation (TB.text msg) Nothing Nothing
       CompoundErrorCustom e -> explainError e
 
 type Explainable l s e = (TextualStream s, ExplainLabel l, ExplainError e)
@@ -113,13 +116,13 @@ buildSpan (Span (LinePos _ sl sc) (LinePos _ el ec)) =
   TB.decimal (succ sl) <> ":" <> TB.decimal (succ sc) <> "-" <> TB.decimal (succ el) <> ":" <> TB.decimal (succ ec)
 
 buildParseErrorExplanation :: ParseErrorExplanation LinePos -> Builder
-buildParseErrorExplanation (ParseErrorExplanation sp labExps (ErrorExplanation reason mayExpected actual)) =
+buildParseErrorExplanation (ParseErrorExplanation sp labExps (ErrorExplanation reason mayExpected mayActual)) =
   TB.intercalate "\n" $ join
     [ ["[Pos     ] " <> buildSpan sp]
     , ["[Stack   ] || " <> TB.intercalate " |> " labExps | not (Seq.null labExps)]
     , ["[Reason  ] " <> reason]
     , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
-    , ["[Actual  ] " <> actual]
+    , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
     ]
 
 buildAllParseErrorExplanations :: Foldable f => f (ParseErrorExplanation LinePos) -> Builder
