@@ -15,6 +15,7 @@ module SimpleParser.Result
   , onParseResult
   ) where
 
+import Data.Text (Text)
 import SimpleParser.Labels (HasLabelStack (..), LabelStack)
 import SimpleParser.Stream (Stream (..))
 
@@ -40,6 +41,7 @@ deriving instance (Show l, Show (Token s), Show (Chunk s)) => Show (StreamError 
 
 data CompoundError l s e =
     CompoundErrorStream !(StreamError l s)
+  | CompoundErrorFail !Text
   | CompoundErrorCustom !e
   deriving (Functor, Foldable, Traversable)
 
@@ -50,6 +52,7 @@ data ParseError l s e = ParseError
   { peLabels :: !(LabelStack l)
   , peEndState :: !s
   , peError :: !(CompoundError l s e)
+  -- , peError :: !(NESeq (CompoundError l s e))
   }
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)

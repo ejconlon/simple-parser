@@ -4,6 +4,7 @@ module SimpleParser.Parser
   , Parser
   , runParser
   , emptyParser
+  , failParser
   , catchJustParser
   , filterParser
   , reflectParser
@@ -42,6 +43,8 @@ import Control.Monad.Trans (MonadTrans (..))
 import Data.Bifunctor (first)
 import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
+import Data.Text (Text)
+import qualified Data.Text as T
 import ListT (ListT (..))
 import qualified ListT
 import SimpleParser.Chunked (Chunked (..))
@@ -100,6 +103,9 @@ instance Monad m => MonadError e (ParserT l s e m) where
             _ -> pure res
         ParseValueSuccess a -> pure (ParseResult t (ParseValueSuccess a))
 
+instance Monad m => MonadFail (ParserT l s e m) where
+  fail = failParser . T.pack
+
 instance MonadTrans (ParserT l s e) where
   lift ma = ParserT (\_ s -> lift (fmap (ParseResult s . ParseValueSuccess) ma))
 
@@ -110,11 +116,15 @@ instance MFunctor (ParserT l s e) where
 runParser :: Parser l s e a -> LabelStack l -> s -> [ParseResult l s e a]
 runParser parser ls s = runIdentity (ListT.toList (runParserT parser ls s))
 
--- | The empty parser.
-emptyParser :: Applicative m => ParserT l s e m a
+-- | The empty parser
+emptyParser :: Monad m => ParserT l s e m a
 emptyParser = ParserT (\_ _ -> ListT (pure Nothing))
 
--- | Catch only a subset of errors. This preserves label information vs rethrowing.
+-- | A simple failing parser
+failParser :: Monad m => Text -> ParserT l s e m a
+failParser msg = ParserT (\ls s -> pure (ParseResult s (ParseValueError (ParseError ls s (CompoundErrorFail msg)))))
+
+-- | Catch only a subset of custom errors. This preserves label information vs rethrowing.
 catchJustParser :: Monad m => (e -> Maybe a) -> ParserT l s e m a -> ParserT l s e m a
 catchJustParser handler parser = ParserT (\ls s -> ListT (go (runParserT parser ls s))) where
   go listt = do
@@ -365,10 +375,11 @@ traverseErrorParser f parser = ParserT (\ls s -> ListT (go (runParserT parser ls
       Nothing -> pure Nothing
       Just (ParseResult t v, rest) -> do
         w <- case v of
-          ParseValueError (ParseError ls es ce) ->
-            case ce of
-              CompoundErrorStream se -> pure (ParseValueError (ParseError ls es (CompoundErrorStream se)))
-              CompoundErrorCustom e -> fmap (ParseValueError . ParseError ls es . CompoundErrorCustom) (f t e)
+          ParseValueError (ParseError ls es ce) -> fmap (ParseValueError . ParseError ls es) mce where
+            mce = case ce of
+              CompoundErrorStream se -> pure (CompoundErrorStream se)
+              CompoundErrorFail msg -> pure (CompoundErrorFail msg)
+              CompoundErrorCustom e -> fmap CompoundErrorCustom (f t e)
           ParseValueSuccess a -> pure (ParseValueSuccess a)
         pure (Just (ParseResult t w, ListT (go rest)))
 

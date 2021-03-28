@@ -88,6 +88,7 @@ instance (Token s ~ Char, TextualChunked (Chunk s), ExplainLabel l, ExplainError
   explainError ce =
     case ce of
       CompoundErrorStream se -> explainError se
+      CompoundErrorFail msg -> ErrorExplanation "failed to parse" Nothing (TB.text msg)
       CompoundErrorCustom e -> explainError e
 
 type Explainable l s e = (TextualStream s, ExplainLabel l, ExplainError e)
