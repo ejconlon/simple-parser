@@ -122,4 +122,4 @@ buildParseErrorExplanation (ParseErrorExplanation sp labExps (ErrorExplanation r
     ]
 
 buildAllParseErrorExplanations :: Foldable f => f (ParseErrorExplanation LinePos) -> Builder
-buildAllParseErrorExplanations = TB.intercalate "\n" . fmap buildParseErrorExplanation . toList
+buildAllParseErrorExplanations = TB.intercalate "\n\n" . fmap buildParseErrorExplanation . toList

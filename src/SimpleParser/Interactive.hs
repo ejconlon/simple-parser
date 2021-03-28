@@ -20,7 +20,7 @@ parseInteractive parser input =
   case performParser (parser <* matchEnd) (newLinePosStream (T.pack input)) of
     Left es ->
       let b = buildAllParseErrorExplanations (fmap explainParseError (toList es))
-      in TIO.putStrLn (TB.run ("Error:\n" <> b))
+      in TIO.putStrLn (TB.run ("Errors:\n" <> b))
     Right ma ->
       case ma of
         Nothing -> putStrLn "No result."
