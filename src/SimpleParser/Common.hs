@@ -24,14 +24,13 @@ module SimpleParser.Common
 import Control.Monad (void)
 import Control.Monad.State (get, gets)
 import Data.Char (digitToInt, isDigit, isSpace)
-import Data.Foldable (toList)
+import Data.Foldable (asum, toList)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
-import SimpleParser.Parser (ParserT, andAllParser, defaultParser, greedyStarParser, isolateParser, labelParser,
-                            optionalParser, orParser)
+import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, labelParser, optionalParser, orParser)
 import SimpleParser.Stream (Span (..), Stream (..))
 
 -- | Enumeration of common labels in textual parsing.
@@ -58,7 +57,7 @@ instance EmbedTextLabel (CompoundTextLabel l) where
 
 -- | From a list of labeled branches, yield a single successful result, or report all errors.
 exclusiveParser :: (Foldable f, Monad m) => f (l, ParserT l s e m a) -> ParserT l s e m a
-exclusiveParser = isolateParser . andAllParser . fmap (uncurry labelParser) . toList
+exclusiveParser = asum . fmap (uncurry labelParser) . toList
 
 -- | Yields the maximal list of separated items. May return an empty list.
 sepByParser :: (Chunked seq elem, Monad m) =>

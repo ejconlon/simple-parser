@@ -22,7 +22,7 @@ import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, decim
                             exclusiveParser, lexemeParser, scientificParser, sepByParser, signedParser, spaceParser)
 import SimpleParser.Explain (ExplainLabel (..))
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Parser (Parser, markParser)
+import SimpleParser.Parser (Parser)
 import SimpleParser.Stream (TextualStream)
 import qualified Text.Builder as TB
 
@@ -65,7 +65,7 @@ sexpParser :: SexpParserC s => SexpParserM s Sexp
 sexpParser = let p = fmap Sexp (recSexpParser p) in p
 
 recSexpParser :: SexpParserC s => SexpParserM s a -> SexpParserM s (SexpF a)
-recSexpParser root = markParser $ exclusiveParser
+recSexpParser root = exclusiveParser
   [ (SexpLabelBranch "list", fmap SexpList (listP root))
   , (SexpLabelBranch "atom", fmap SexpAtom atomP)
   ]
@@ -107,7 +107,7 @@ floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
 atomP :: SexpParserC s => SexpParserM s Atom
-atomP = lexP $ markParser $ exclusiveParser
+atomP = lexP $ exclusiveParser
   [ (SexpLabelBranch "string", fmap AtomString stringP)
   , (SexpLabelBranch "int", fmap AtomInt intP)
   , (SexpLabelBranch "float", fmap AtomFloat floatP)

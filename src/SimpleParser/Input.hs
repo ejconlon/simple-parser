@@ -1,7 +1,9 @@
 -- | Useful combinators for 'ParserT' and 'Stream'.
 -- Classified as SAFE or UNSAFE. SAFE always return a value. UNSAFE throw.
 module SimpleParser.Input
-  ( peekToken
+  ( withToken
+  , withChunk
+  , peekToken
   , popToken
   , peekChunk
   , popChunk
@@ -25,16 +27,17 @@ import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)
-import SimpleParser.Result (CompoundError (..), ParseError (..), ParseResult (..), ParseValue (..), RawError (..),
-                            StreamError (..))
+import SimpleParser.Result (CompoundError (..), ParseError (..), ParseResult (..), RawError (..), StreamError (..))
 import SimpleParser.Stream (Stream (..))
 
 throwStreamError :: Monad m => RawError l (Chunk s) (Token s) -> ParserT l s e m a
-throwStreamError re = ParserT (\ls s -> pure (ParseResult s (ParseValueError (ParseError ls s (CompoundErrorStream (StreamError re))))))
+throwStreamError re = ParserT (\ls s -> pure (Just (ParseResultError (pure (ParseError ls s s (CompoundErrorStream (StreamError re)))))))
 
+-- | Fetches the next token from the stream and runs the callback.
 withToken :: (Stream s, Monad m) => (Maybe (Token s) -> ParserT l s e m a) -> ParserT l s e m a
 withToken = markWithOptStateParser streamTake1
 
+-- | Fetches the next chunk from the stream and runs the callback.
 withChunk :: (Stream s, Monad m) => Int -> (Maybe (Chunk s) -> ParserT l s e m a) -> ParserT l s e m a
 withChunk n = markWithOptStateParser (streamTakeN n)
 

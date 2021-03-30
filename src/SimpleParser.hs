@@ -11,7 +11,6 @@ module SimpleParser
   , module SimpleParser.Interactive
   , module SimpleParser.Labels
   , module SimpleParser.Parser
-  , module SimpleParser.Perform
   , module SimpleParser.Result
   , module SimpleParser.Stream
   ) where
@@ -23,6 +22,5 @@ import SimpleParser.Input
 import SimpleParser.Interactive
 import SimpleParser.Labels
 import SimpleParser.Parser
-import SimpleParser.Perform
 import SimpleParser.Result
 import SimpleParser.Stream

@@ -12,8 +12,7 @@ import Data.Void (Void, absurd)
 import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (CompoundTextLabel (..), TextLabel (..))
 import SimpleParser.Labels (LabelStack (..))
-import SimpleParser.Result (AnchoredParseError (..), CompoundError (..), ParseError (..), RawError (..),
-                            StreamError (..))
+import SimpleParser.Result (CompoundError (..), ParseError (..), RawError (..), StreamError (..))
 import SimpleParser.Stream (LinePos (..), Span (..), Stream (..), TextualStream)
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
@@ -102,8 +101,8 @@ data ParseErrorExplanation p = ParseErrorExplanation
   , peeErrExp :: !ErrorExplanation
   }
 
-explainParseError :: Explainable l s e => AnchoredParseError l s e -> ParseErrorExplanation (Pos s)
-explainParseError (AnchoredParseError startState (ParseError labelStack endState err)) =
+explainParseError :: Explainable l s e => ParseError l s e -> ParseErrorExplanation (Pos s)
+explainParseError (ParseError labelStack startState endState err) =
   let startPos = streamViewPos startState
       endPos = streamViewPos endState
       sp = Span startPos endPos
@@ -115,15 +114,21 @@ buildSpan :: Span LinePos -> Builder
 buildSpan (Span (LinePos _ sl sc) (LinePos _ el ec)) =
   TB.decimal (succ sl) <> ":" <> TB.decimal (succ sc) <> "-" <> TB.decimal (succ el) <> ":" <> TB.decimal (succ ec)
 
+buildErrorExplanation :: ErrorExplanation -> [Builder]
+buildErrorExplanation (ErrorExplanation reason mayExpected mayActual) = join
+  [ ["[Reason  ] " <> reason]
+  , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
+  , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
+  ]
+
 buildParseErrorExplanation :: ParseErrorExplanation LinePos -> Builder
-buildParseErrorExplanation (ParseErrorExplanation sp labExps (ErrorExplanation reason mayExpected mayActual)) =
-  TB.intercalate "\n" $ join
-    [ ["[Pos     ] " <> buildSpan sp]
-    , ["[Stack   ] || " <> TB.intercalate " |> " labExps | not (Seq.null labExps)]
-    , ["[Reason  ] " <> reason]
-    , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
-    , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
-    ]
+buildParseErrorExplanation (ParseErrorExplanation sp labExps errExp) =
+  let hd = join
+        [ ["[Pos       ] " <> buildSpan sp]
+        , ["[Labels    ] || " <> TB.intercalate " |> " labExps | not (Seq.null labExps)]
+        ]
+      tl = buildErrorExplanation errExp
+  in TB.intercalate "\n" (hd ++ tl)
 
 buildAllParseErrorExplanations :: Foldable f => f (ParseErrorExplanation LinePos) -> Builder
 buildAllParseErrorExplanations = TB.intercalate "\n\n" . fmap buildParseErrorExplanation . toList

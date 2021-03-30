@@ -6,15 +6,11 @@ module SimpleParser.Result
   , StreamError (..)
   , CompoundError (..)
   , ParseError (..)
-  , AnchoredParseError (..)
+  , ParseSuccess (..)
   , ParseResult (..)
-  , ParseValue (..)
-  , onParseValue
-  , mkParseSuccessResult
-  , mkParseErrorResult
-  , onParseResult
   ) where
 
+import Data.Sequence.NonEmpty (NESeq)
 import Data.Text (Text)
 import SimpleParser.Labels (HasLabelStack (..), LabelStack)
 import SimpleParser.Stream (Stream (..))
@@ -50,9 +46,9 @@ deriving instance (Show l, Show (Token s), Show (Chunk s), Show e) => Show (Comp
 
 data ParseError l s e = ParseError
   { peLabels :: !(LabelStack l)
+  , peStartState :: !s
   , peEndState :: !s
   , peError :: !(CompoundError l s e)
-  -- , peError :: !(NESeq (CompoundError l s e))
   }
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
@@ -62,46 +58,15 @@ instance HasLabelStack l (ParseError l s e) where
   viewLabelStack = peLabels
   setLabelStack ls pe = pe { peLabels = ls }
 
-data AnchoredParseError l s e = AnchoredParseError
-  { apeStartState :: !s
-  , apeParseError :: !(ParseError l s e)
-  }
+data ParseSuccess s a = ParseSuccess
+  { psEndState :: !s
+  , psValue :: !a
+  } deriving (Eq, Show, Functor, Foldable, Traversable)
 
-deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (AnchoredParseError l s e)
-deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (AnchoredParseError l s e)
-
--- | Strict 'Either' for parse results.
-data ParseValue l s e a =
-    ParseValueError !(ParseError l s e)
-  | ParseValueSuccess !a
+data ParseResult l s e a =
+    ParseResultError !(NESeq (ParseError l s e))
+  | ParseResultSuccess !(ParseSuccess s a)
   deriving (Functor, Foldable, Traversable)
-
-deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseValue l s e a)
-deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseValue l s e a)
-
-onParseValue :: (ParseError l s e -> z) -> (a -> z) -> ParseValue l s e a -> z
-onParseValue onError onSuccess value =
-  case value of
-    ParseValueError e -> onError e
-    ParseValueSuccess a -> onSuccess a
-
--- | Strict pair of parse result and state at the time it was yielded.
-data ParseResult l s e a = ParseResult
-  { prState :: !s
-  , prValue :: !(ParseValue l s e a)
-  } deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseResult l s e a)
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseResult l s e a)
-
-mkParseSuccessResult :: s -> a -> ParseResult l s e a
-mkParseSuccessResult st = ParseResult st . ParseValueSuccess
-
-mkParseErrorResult :: s -> ParseError l s e -> ParseResult l s e a
-mkParseErrorResult st = ParseResult st . ParseValueError
-
-onParseResult :: (s -> ParseError l s e -> z) -> (s -> a -> z) -> ParseResult l s e a -> z
-onParseResult onError onSuccess (ParseResult st value) =
-  case value of
-    ParseValueError e -> onError st e
-    ParseValueSuccess a -> onSuccess st a
