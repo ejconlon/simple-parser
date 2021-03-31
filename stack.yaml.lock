@@ -3,17 +3,10 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages:
-- completed:
-    hackage: errata-0.2.0.0@sha256:e198f9c27ab36a9e54d473ebc872ef3cf1057c74316f6c9cab14e00ac6627257,1632
-    pantry-tree:
-      size: 508
-      sha256: 6b699010137e62863d8c5880e991f91c79caed64ae5d557eb2af1aaa4b454712
-  original:
-    hackage: errata-0.2.0.0
+packages: []
 snapshots:
 - completed:
-    size: 565715
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/7.yaml
-    sha256: 1b5e4124989399e60e7a7901f0cefd910beea546131fb07a13a7208c4cc8b7ee
-  original: lts-17.7
+    size: 565720
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/8.yaml
+    sha256: 76bf8992ff8dfe6eda9c02f81866138c2369344d5011ab39ae403457c4448b03
+  original: lts-17.8

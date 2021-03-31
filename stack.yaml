@@ -1,7 +1,7 @@
-resolver: lts-17.7
+resolver: lts-17.8
 
 packages:
 - .
 
-extra-deps:
-- errata-0.2.0.0
+# extra-deps:
+# - errata-0.2.0.0
