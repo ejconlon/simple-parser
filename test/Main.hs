@@ -26,7 +26,7 @@ type TestParser a = Parser Label TestState Error a
 
 type TestResult a = ParseResult Label TestState Error a
 
-type TestRawError = RawError Label Text Char
+type TestRawError = RawError Text Char
 
 type TestParseError = ParseError Label TestState Error
 
@@ -43,48 +43,42 @@ sucRes st = Just . ParseResultSuccess . ParseSuccess st
 errRes :: [TestParseError] -> Maybe (TestResult a)
 errRes es = Just (ParseResultError (NESeq.unsafeFromSeq (Seq.fromList es)))
 
-custErr :: TestState -> TestState -> Error -> TestParseError
-custErr startSt endSt = ParseError emptyLabelStack startSt endSt . CompoundErrorCustom
+custErr :: TestState -> Error -> TestParseError
+custErr endSt = ParseError emptyStack endSt . CompoundErrorCustom
 
-stmErr :: TestState -> TestState -> TestRawError -> TestParseError
-stmErr startSt endSt = ParseError emptyLabelStack startSt endSt . CompoundErrorStream . StreamError
+stmErr :: TestState -> TestRawError -> TestParseError
+stmErr endSt = ParseError emptyStack endSt . CompoundErrorStream . StreamError
 
-failErr :: TestState -> TestState -> Text -> TestParseError
-failErr startSt endSt = ParseError emptyLabelStack startSt endSt . CompoundErrorFail
+failErr :: TestState -> Text -> TestParseError
+failErr endSt = ParseError emptyStack endSt . CompoundErrorFail
 
--- custErr :: TestState -> TestState -> Error -> Maybe (TestResult a)
--- custErr startSt endSt = errRes . pure . custErr startSt endSt
-
--- stmErr :: TestState -> TestState -> TestRawError -> Maybe (TestResult a)
--- stmErr startSt endSt = errRes . pure . stmErr startSt endSt
-
--- failErr :: TestState -> TestState -> Text -> Maybe (TestResult a)
--- failErr startSt endSt = errRes . pure . failErr startSt endSt
+markWith :: TestState -> TestParseError -> TestParseError
+markWith s = markParseError (Mark Nothing s)
 
 anyTokErr :: TestState -> TestParseError
-anyTokErr s = stmErr s s RawErrorAnyToken
+anyTokErr s = markWith s (stmErr s RawErrorAnyToken)
 
 anyChunkErr :: TestState -> TestParseError
-anyChunkErr s = stmErr s s RawErrorAnyChunk
+anyChunkErr s = markWith s (stmErr s RawErrorAnyChunk)
 
 matchTokErr :: TestState -> Char -> Maybe Char -> TestParseError
-matchTokErr s x my = stmErr s (fwd 1 s) (RawErrorMatchToken x my)
+matchTokErr s x my = markWith s (stmErr (fwd 1 s) (RawErrorMatchToken x my))
 
 matchChunkErr :: TestState -> Text -> Maybe Text -> TestParseError
-matchChunkErr s x my = stmErr s (fwd (T.length x) s) (RawErrorMatchChunk x my)
+matchChunkErr s x my = markWith s (stmErr (fwd (T.length x) s) (RawErrorMatchChunk x my))
 
 matchEndErr :: TestState -> Char -> TestParseError
-matchEndErr s x = stmErr s (fwd 1 s) (RawErrorMatchEnd x)
+matchEndErr s x = markWith s (stmErr (fwd 1 s) (RawErrorMatchEnd x))
 
 takeTokErr :: TestState -> Int -> Maybe Char -> TestParseError
-takeTokErr s n my = stmErr s (fwd n s) (RawErrorTakeTokensWhile1 Nothing my)
+takeTokErr s n my = markWith s (stmErr (fwd n s) (RawErrorTakeTokensWhile1 my))
 
 dropTokErr :: TestState -> Int -> Maybe Char -> TestParseError
-dropTokErr s n my = stmErr s (fwd n s) (RawErrorDropTokensWhile1 Nothing my)
+dropTokErr s n my = markWith s (stmErr (fwd n s) (RawErrorDropTokensWhile1 my))
 
 testParserCase :: (Show a, Eq a) => ParserCase a -> TestTree
 testParserCase (ParserCase name parser input expected) = testCase name $ do
-  let actual = runParser parser emptyLabelStack (newOffsetStream input)
+  let actual = runParser parser (newOffsetStream input)
   actual @?= expected
 
 test_empty :: [TestTree]
@@ -109,8 +103,8 @@ test_fail :: [TestTree]
 test_fail =
   let parser = fail "i give up" :: TestParser Int
       cases =
-        [ ParserCase "empty" parser "" (errRes [(failErr (OffsetStream 0 "") (OffsetStream 0 "") "i give up")])
-        , ParserCase "non-empty" parser "hi" (errRes [(failErr (OffsetStream 0 "hi") (OffsetStream 0 "hi") "i give up")])
+        [ ParserCase "empty" parser "" (errRes [(failErr (OffsetStream 0 "") "i give up")])
+        , ParserCase "non-empty" parser "hi" (errRes [(failErr (OffsetStream 0 "hi") "i give up")])
         ]
   in fmap testParserCase cases
 
@@ -353,8 +347,8 @@ test_throw =
   let err = Error "boo"
       parser = throwParser err :: TestParser Int
       cases =
-        [ ParserCase "empty" parser "" (errRes [custErr (OffsetStream 0 "") (OffsetStream 0 "") err])
-        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 0 "hi") (OffsetStream 0 "hi") err])
+        [ ParserCase "empty" parser "" (errRes [custErr (OffsetStream 0 "") err])
+        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 0 "hi") err])
         ]
   in fmap testParserCase cases
 
@@ -364,7 +358,7 @@ test_consume_throw =
       parser = anyToken *> throwParser err :: TestParser Int
       cases =
         [ ParserCase "empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
-        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 1 "i") (OffsetStream 1 "i") err])
+        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 1 "i") err])
         ]
   in fmap testParserCase cases
 
@@ -425,7 +419,7 @@ test_catch_recur =
       err2 = Error "two"
       parser = catchParser (throwParser err1) (const (throwParser err2)) :: TestParser Int
       cases =
-        [ ParserCase "non-empty" parser "hi" (errRes [custErr state state err2])
+        [ ParserCase "non-empty" parser "hi" (errRes [custErr state err2])
         ]
   in fmap testParserCase cases
 
@@ -457,7 +451,7 @@ test_silence_empty =
 
 test_look_ahead_pure :: [TestTree]
 test_look_ahead_pure =
-  let parser = lookAheadParser (pure 1) :: TestParser Int
+  let parser = lookAheadParser Nothing (pure 1) :: TestParser Int
       cases =
         [ ParserCase "empty" parser "" (sucRes (OffsetStream 0 "") 1)
         , ParserCase "non-empty" parser "hi" (sucRes (OffsetStream 0 "hi") 1)
@@ -466,9 +460,9 @@ test_look_ahead_pure =
 
 test_look_ahead_success :: [TestTree]
 test_look_ahead_success =
-  let parser = lookAheadParser anyToken
+  let parser = lookAheadParser Nothing anyToken
       cases =
-        [ ParserCase "non-match empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
+        [ ParserCase "non-match empty" parser "" (errRes [markWith (OffsetStream 0 "") (anyTokErr (OffsetStream 0 ""))])
         , ParserCase "non-empty" parser "hi" (sucRes (OffsetStream 0 "hi") 'h')
         ]
   in fmap testParserCase cases
@@ -476,10 +470,10 @@ test_look_ahead_success =
 test_look_ahead_failure :: [TestTree]
 test_look_ahead_failure =
   let err = Error "boo"
-      parser = lookAheadParser (anyToken *> throwParser err) :: TestParser Char
+      parser = lookAheadParser Nothing (anyToken *> throwParser err) :: TestParser Char
       cases =
-        [ ParserCase "non-match empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
-        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 0 "hi") (OffsetStream 1 "i") err])
+        [ ParserCase "non-match empty" parser "" (errRes [markWith (OffsetStream 0 "") (anyTokErr (OffsetStream 0 ""))])
+        , ParserCase "non-empty" parser "hi" (errRes [markWith (OffsetStream 0 "hi") (custErr (OffsetStream 1 "i") err)])
         ]
   in fmap testParserCase cases
 
@@ -554,7 +548,7 @@ testJsonTrees = fmap (\(n, s, e) -> testJsonCase n s e)
 parseJson :: Text -> JsonResult
 parseJson str =
   let p = jsonParser <* matchEnd
-  in case runParser p emptyLabelStack str of
+  in case runParser p str of
     Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a
     _ -> Nothing
 

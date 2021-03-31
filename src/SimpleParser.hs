@@ -9,9 +9,9 @@ module SimpleParser
   , module SimpleParser.Explain
   , module SimpleParser.Input
   , module SimpleParser.Interactive
-  , module SimpleParser.Labels
   , module SimpleParser.Parser
   , module SimpleParser.Result
+  , module SimpleParser.Stack
   , module SimpleParser.Stream
   ) where
 
@@ -20,7 +20,7 @@ import SimpleParser.Common
 import SimpleParser.Explain
 import SimpleParser.Input
 import SimpleParser.Interactive
-import SimpleParser.Labels
 import SimpleParser.Parser
 import SimpleParser.Result
+import SimpleParser.Stack
 import SimpleParser.Stream

@@ -5,58 +5,94 @@ module SimpleParser.Result
   ( RawError (..)
   , StreamError (..)
   , CompoundError (..)
+  , Mark (..)
   , ParseError (..)
+  , parseErrorResume
+  , markParseError
+  , unmarkParseError
+  , parseErrorEnclosingLabels
+  , parseErrorNarrowestSpan
   , ParseSuccess (..)
   , ParseResult (..)
   ) where
 
+import Data.Sequence (Seq (..))
+import qualified Data.Sequence as Seq
 import Data.Sequence.NonEmpty (NESeq)
 import Data.Text (Text)
-import SimpleParser.Labels (HasLabelStack (..), LabelStack)
-import SimpleParser.Stream (Stream (..))
+import SimpleParser.Stack (Stack (..), bottomStack, emptyStack, pushStack, topStack)
+import SimpleParser.Stream (Span (..), Stream (..))
 
-data RawError label chunk token =
+data RawError chunk token =
     RawErrorMatchEnd !token
   | RawErrorAnyToken
   | RawErrorAnyChunk
-  | RawErrorSatisfyToken !(Maybe label) !(Maybe token)
+  | RawErrorSatisfyToken !(Maybe token)
   | RawErrorMatchToken !token !(Maybe token)
   | RawErrorMatchChunk !chunk !(Maybe chunk)
-  | RawErrorTakeTokensWhile1 !(Maybe label) !(Maybe token)
-  | RawErrorDropTokensWhile1 !(Maybe label) !(Maybe token)
+  | RawErrorTakeTokensWhile1 !(Maybe token)
+  | RawErrorDropTokensWhile1 !(Maybe token)
   deriving (Eq, Show)
 
 -- | 'RawStreamError' specialized to 'Stream' types - newtyped to allow GHC
 -- to derive eq/show in the absense of type families.
-newtype StreamError l s = StreamError
-  { unStreamError :: RawError l (Chunk s) (Token s)
+newtype StreamError s = StreamError
+  { unStreamError :: RawError (Chunk s) (Token s)
   }
 
-deriving instance (Eq l, Eq (Token s), Eq (Chunk s)) => Eq (StreamError l s)
-deriving instance (Show l, Show (Token s), Show (Chunk s)) => Show (StreamError l s)
+deriving instance (Eq (Token s), Eq (Chunk s)) => Eq (StreamError s)
+deriving instance (Show (Token s), Show (Chunk s)) => Show (StreamError s)
 
-data CompoundError l s e =
-    CompoundErrorStream !(StreamError l s)
+data CompoundError s e =
+    CompoundErrorStream !(StreamError s)
   | CompoundErrorFail !Text
   | CompoundErrorCustom !e
   deriving (Functor, Foldable, Traversable)
 
-deriving instance (Eq l, Eq (Token s), Eq (Chunk s), Eq e) => Eq (CompoundError l s e)
-deriving instance (Show l, Show (Token s), Show (Chunk s), Show e) => Show (CompoundError l s e)
+deriving instance (Eq (Token s), Eq (Chunk s), Eq e) => Eq (CompoundError s e)
+deriving instance (Show (Token s), Show (Chunk s), Show e) => Show (CompoundError s e)
+
+data Mark l s = Mark
+  { markLabel :: !(Maybe l)
+  , markState :: !s
+  } deriving (Eq, Show)
+
+type MarkStack l s = Stack (Mark l s)
 
 data ParseError l s e = ParseError
-  { peLabels :: !(LabelStack l)
-  , peStartState :: !s
+  { peMarkStack :: !(MarkStack l s)
   , peEndState :: !s
-  , peError :: !(CompoundError l s e)
+  , peError :: !(CompoundError s e)
   }
+
+-- | Returns the resumption point of the 'ParseError'.
+-- If it has been marked, we use that, otherwise we assume it starts at the exact error point.
+parseErrorResume :: ParseError l s e -> s
+parseErrorResume pe = maybe (peEndState pe) markState (topStack (peMarkStack pe))
+
+-- | Updates a 'ParseError' with a resumption point.
+markParseError :: Mark l s -> ParseError l s e -> ParseError l s e
+markParseError s pe = pe { peMarkStack = pushStack s (peMarkStack pe) }
+
+-- | Clears marks from a 'ParseError'.
+unmarkParseError :: ParseError l s e -> ParseError l s e
+unmarkParseError pe = pe { peMarkStack = emptyStack }
+
+-- | Returns the narrowest span
+parseErrorNarrowestSpan :: Stream s => ParseError l s e -> (Maybe l, Span (Pos s))
+parseErrorNarrowestSpan pe = (ml, Span startPos endPos) where
+  endPos = streamViewPos (peEndState pe)
+  (ml, startPos) = maybe (Nothing, endPos) (\(Mark mx s) -> (mx, streamViewPos s)) (bottomStack (peMarkStack pe))
+
+-- | Returns labels enclosing the narrowest span, from coarsest to finest
+parseErrorEnclosingLabels :: ParseError l s e -> Seq l
+parseErrorEnclosingLabels pe =
+  case unStack (peMarkStack pe) of
+    Empty -> Empty
+    _ :<| s -> s >>= \(Mark ml _) -> maybe Seq.empty Seq.singleton ml
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseError l s e)
-
-instance HasLabelStack l (ParseError l s e) where
-  viewLabelStack = peLabels
-  setLabelStack ls pe = pe { peLabels = ls }
 
 data ParseSuccess s a = ParseSuccess
   { psEndState :: !s

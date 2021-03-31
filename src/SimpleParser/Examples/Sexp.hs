@@ -13,18 +13,18 @@ module SimpleParser.Examples.Sexp
 
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
+import Data.Foldable (asum)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser.Chunked (Chunked (..), packChunk)
 import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, decimalParser, escapedStringParser,
-                            exclusiveParser, lexemeParser, scientificParser, sepByParser, signedParser, spaceParser)
+                            lexemeParser, scientificParser, sepByParser, signedNumStartPred, signedParser, spaceParser)
 import SimpleParser.Explain (ExplainLabel (..))
 import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Parser (Parser)
+import SimpleParser.Parser (Parser, commitParser, onEmptyParser, orParser)
 import SimpleParser.Stream (TextualStream)
-import qualified Text.Builder as TB
 
 data Atom =
     AtomIdent !Text
@@ -39,15 +39,13 @@ data SexpF a =
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 data SexpLabel =
-    SexpLabelBranch !Text
-  | SexpLabelIdentStart
+    SexpLabelIdentStart
   | SexpLabelEmbedText !TextLabel
   deriving (Eq, Show)
 
 instance ExplainLabel SexpLabel where
   explainLabel sl =
     case sl of
-      SexpLabelBranch b -> "branch " <> TB.text b
       SexpLabelIdentStart -> "start of identifier"
       SexpLabelEmbedText tl -> explainLabel tl
 
@@ -65,10 +63,9 @@ sexpParser :: SexpParserC s => SexpParserM s Sexp
 sexpParser = let p = fmap Sexp (recSexpParser p) in p
 
 recSexpParser :: SexpParserC s => SexpParserM s a -> SexpParserM s (SexpF a)
-recSexpParser root = exclusiveParser
-  [ (SexpLabelBranch "list", fmap SexpList (listP root))
-  , (SexpLabelBranch "atom", fmap SexpAtom atomP)
-  ]
+recSexpParser root = onEmptyParser (orParser lp ap) (fail "failed to parse sexp document") where
+  lp = commitParser openParenP (fmap SexpList (listP root))
+  ap = fmap SexpAtom atomP
 
 nonDelimPred :: Char -> Bool
 nonDelimPred c = c /= '(' && c /= ')' && not (isSpace c)
@@ -107,11 +104,11 @@ floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
 atomP :: SexpParserC s => SexpParserM s Atom
-atomP = lexP $ exclusiveParser
-  [ (SexpLabelBranch "string", fmap AtomString stringP)
-  , (SexpLabelBranch "int", fmap AtomInt intP)
-  , (SexpLabelBranch "float", fmap AtomFloat floatP)
-  , (SexpLabelBranch "identifier", fmap AtomIdent identifierP)
+atomP = lexP $ asum
+  [ commitParser (void (matchToken '"')) (fmap AtomString stringP)
+  , commitParser (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomInt intP)
+  , commitParser (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomFloat floatP)
+  , commitParser (void (satisfyToken Nothing identStartPred)) (fmap AtomIdent identifierP)
   ]
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)

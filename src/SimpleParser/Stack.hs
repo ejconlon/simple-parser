@@ -1,0 +1,38 @@
+module SimpleParser.Stack
+  ( Stack (..)
+  , emptyStack
+  , pushStack
+  , topStack
+  , bottomStack
+  ) where
+
+import Data.Sequence (Seq (..))
+
+-- | A stack supporting O(1) push, top, and bottom.
+-- Behind the newtype, a "push" onto the stack is implemented as "snoc", therefore
+-- fold/traverse goes from bottom of stack (most generic label) to top (most specific label).
+newtype Stack a = Stack
+  { unStack :: Seq a
+  } deriving (Eq, Show, Functor, Foldable, Traversable)
+
+-- | Easy constructor for the empty stack
+emptyStack :: Stack a
+emptyStack = Stack Empty
+
+-- | Pushes a an element onto a 'Stack'
+pushStack :: a -> Stack a -> Stack a
+pushStack a = Stack . (:|> a) . unStack
+
+-- | Returns the top element of the stack (most recently pushed).
+topStack :: Stack a -> Maybe a
+topStack (Stack s) =
+  case s of
+    Empty -> Nothing
+    _ :|> a -> Just a
+
+-- | Returns the bottom element of the stack (least recently pushed).
+bottomStack :: Stack a -> Maybe a
+bottomStack (Stack s) =
+  case s of
+    Empty -> Nothing
+    a :<| _ -> Just a

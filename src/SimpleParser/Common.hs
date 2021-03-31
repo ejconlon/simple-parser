@@ -4,7 +4,6 @@ module SimpleParser.Common
   ( TextLabel (..)
   , EmbedTextLabel (..)
   , CompoundTextLabel (..)
-  , exclusiveParser
   , sepByParser
   , betweenParser
   , lexemeParser
@@ -14,6 +13,7 @@ module SimpleParser.Common
   , spaceParser1
   , hspaceParser1
   , decimalParser
+  , signedNumStartPred
   , scientificParser
   , signedParser
   , escapedStringParser
@@ -24,13 +24,12 @@ module SimpleParser.Common
 import Control.Monad (void)
 import Control.Monad.State (get, gets)
 import Data.Char (digitToInt, isDigit, isSpace)
-import Data.Foldable (asum, toList)
 import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
-import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, labelParser, optionalParser, orParser)
+import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser, orParser)
 import SimpleParser.Stream (Span (..), Stream (..))
 
 -- | Enumeration of common labels in textual parsing.
@@ -54,10 +53,6 @@ data CompoundTextLabel l =
 
 instance EmbedTextLabel (CompoundTextLabel l) where
   embedTextLabel = CompoundTextLabelText
-
--- | From a list of labeled branches, yield a single successful result, or report all errors.
-exclusiveParser :: (Foldable f, Monad m) => f (l, ParserT l s e m a) -> ParserT l s e m a
-exclusiveParser = asum . fmap (uncurry labelParser) . toList
 
 -- | Yields the maximal list of separated items. May return an empty list.
 sepByParser :: (Chunked seq elem, Monad m) =>
@@ -140,6 +135,10 @@ exponentParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => Int -
 exponentParser e' = do
   void (orParser (matchToken 'e') (matchToken 'E'))
   fmap (+ e') (signedParser (pure ()) decimalParser)
+
+-- | Predicate for satisfying the start of signed numbers
+signedNumStartPred :: Char -> Bool
+signedNumStartPred c = isDigit c || c == '+' || c == '-'
 
 -- | Parses a floating point value as a 'Scientific' number (equivalent to Megaparsec's 'scientific').
 scientificParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m Scientific

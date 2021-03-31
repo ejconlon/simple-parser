@@ -3,7 +3,6 @@
 module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)
-  , JsonLabel (..)
   , JsonParserC
   , JsonParserM
   , jsonParser
@@ -11,18 +10,17 @@ module SimpleParser.Examples.Json
   ) where
 
 import Control.Monad (void)
+import Data.Foldable (asum)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
 import SimpleParser.Chunked (TextualChunked (..))
-import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, escapedStringParser, exclusiveParser,
-                            lexemeParser, scientificParser, sepByParser, spaceParser)
-import SimpleParser.Explain (ExplainLabel (..))
-import SimpleParser.Input (matchChunk, matchToken)
-import SimpleParser.Parser (Parser)
+import SimpleParser.Common (TextLabel, betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
+                            signedNumStartPred, spaceParser)
+import SimpleParser.Input (matchChunk, matchToken, satisfyToken)
+import SimpleParser.Parser (Parser, commitParser, onEmptyParser, orParser)
 import SimpleParser.Stream (Stream (..), TextualStream)
-import qualified Text.Builder as TB
 
 data JsonF a =
     JsonObject !(Seq (Text, a))
@@ -35,37 +33,26 @@ data JsonF a =
 
 newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
 
-data JsonLabel =
-    JsonLabelBranch !Text
-  | JsonLabelEmbedText !TextLabel
-  deriving (Eq, Show)
-
-instance ExplainLabel JsonLabel where
-  explainLabel jl =
-    case jl of
-      JsonLabelBranch b -> "branch " <> TB.text b
-      JsonLabelEmbedText tl -> explainLabel tl
-
-instance EmbedTextLabel JsonLabel where
-  embedTextLabel = JsonLabelEmbedText
-
 type JsonParserC s = (TextualStream s, Eq (Chunk s))
 
-type JsonParserM s a = Parser JsonLabel s Void a
+type JsonParserM s a = Parser TextLabel s Void a
 
 jsonParser :: JsonParserC s => JsonParserM s Json
 jsonParser = let p = fmap Json (recJsonParser p) in p
 
+isBoolStartPred :: Char -> Bool
+isBoolStartPred c = c == 't' || c == 'f'
+
 recJsonParser :: JsonParserC s => JsonParserM s a -> JsonParserM s (JsonF a)
-recJsonParser root = exclusiveParser opts where
+recJsonParser root = onEmptyParser (asum opts) (fail "failed to parse json document") where
   pairP = objectPairP root
   opts =
-    [ (JsonLabelBranch "object", objectP pairP)
-    , (JsonLabelBranch "array" , arrayP root)
-    , (JsonLabelBranch "string", stringP)
-    , (JsonLabelBranch "num", numP)
-    , (JsonLabelBranch "bool", boolP)
-    , (JsonLabelBranch "null", nullP)
+    [ commitParser openBraceP (objectP pairP)
+    , commitParser openBracketP (arrayP root)
+    , commitParser openQuoteP stringP
+    , commitParser (void (satisfyToken Nothing signedNumStartPred)) numP
+    , commitParser (void (satisfyToken Nothing isBoolStartPred)) boolP
+    , commitParser (void (matchToken 'n')) nullP
     ]
 
 spaceP :: JsonParserC s => JsonParserM s ()
@@ -104,10 +91,7 @@ nullP :: JsonParserC s => JsonParserM s (JsonF a)
 nullP = JsonNull <$ nullTokP
 
 boolP :: JsonParserC s => JsonParserM s (JsonF a)
-boolP = exclusiveParser
-  [ (JsonLabelBranch "true", JsonBool True <$ trueTokP)
-  , (JsonLabelBranch "false", JsonBool False <$ falseTokP)
-  ]
+boolP = orParser (JsonBool True <$ trueTokP) (JsonBool False <$ falseTokP)
 
 numP :: JsonParserC s => JsonParserM s (JsonF a)
 numP = fmap JsonNum scientificParser
