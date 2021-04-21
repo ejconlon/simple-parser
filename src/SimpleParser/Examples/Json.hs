@@ -15,12 +15,9 @@ import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser.Chunked (TextualChunked (..))
-import SimpleParser.Common (TextLabel, betweenParser, escapedStringParser, lexemeParser, scientificParser, sepByParser,
-                            signedNumStartPred, spaceParser)
-import SimpleParser.Input (matchChunk, matchToken, satisfyToken)
-import SimpleParser.Parser (Parser, commitParser, onEmptyParser, orParser)
-import SimpleParser.Stream (Stream (..), TextualStream)
+import SimpleParser (Parser, Stream (..), TextLabel, TextualChunked (..), TextualStream, betweenParser, commitParser,
+                     escapedStringParser, lexemeParser, matchChunk, matchToken, onEmptyParser, orParser, satisfyToken,
+                     scientificParser, sepByParser, signedNumStartPred, spaceParser)
 
 data JsonF a =
     JsonObject !(Seq (Text, a))

@@ -18,13 +18,10 @@ import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser.Chunked (Chunked (..), packChunk)
-import SimpleParser.Common (EmbedTextLabel (..), TextLabel, betweenParser, decimalParser, escapedStringParser,
-                            lexemeParser, scientificParser, sepByParser, signedNumStartPred, signedParser, spaceParser)
-import SimpleParser.Explain (ExplainLabel (..))
-import SimpleParser.Input (matchToken, satisfyToken, takeTokensWhile)
-import SimpleParser.Parser (Parser, commitParser, onEmptyParser, orParser)
-import SimpleParser.Stream (TextualStream)
+import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), Parser, TextLabel, TextualStream,
+                     betweenParser, commitParser, decimalParser, escapedStringParser, lexemeParser, matchToken,
+                     onEmptyParser, orParser, packChunk, satisfyToken, scientificParser, sepByParser,
+                     signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
