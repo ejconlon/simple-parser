@@ -156,8 +156,8 @@ instance Monad m => MonadState s (ParserT l s e m) where
 
 -- | Catch only a subset of custom errors. This preserves label information vs rethrowing.
 catchJustParser :: Monad m => (e -> Maybe b) -> ParserT l s e m a -> (b -> ParserT l s e m a) -> ParserT l s e m a
-catchJustParser filterer parser handler = ParserT (runParserT parser >=> go) where
-    go mres =
+catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >>= go s0) where
+    go s0 mres =
       case mres of
         Nothing -> pure Nothing
         Just res ->
@@ -167,34 +167,34 @@ catchJustParser filterer parser handler = ParserT (runParserT parser >=> go) whe
               pure mres
             ParseResultError es ->
               -- Find first custom error to handle
-              goSplit Empty (NESeq.toSeq es)
+              goSplit s0 Empty (NESeq.toSeq es)
 
-    goSplit beforeEs afterEs =
+    goSplit s0 beforeEs afterEs =
       case seqPartition extractCustomError afterEs of
         Nothing ->
           -- No next custom error, finally yield all other errors
           pure (maybe empty (pure . ParseResultError) (NESeq.nonEmptySeq (beforeEs <> afterEs)))
         Just sep ->
           -- Found custom error - handle it
-          goHandle beforeEs sep
+          goHandle s0 beforeEs sep
 
-    goHandle beforeEs (SeqPartition nextBeforeEs targetE (s, e) afterEs) =
+    goHandle s0 beforeEs (SeqPartition nextBeforeEs targetE (_, e) afterEs) =
       case filterer e of
         Nothing ->
           -- Not handling error;  - find next custom error
-          goSplit (beforeEs <> (targetE :<| nextBeforeEs)) afterEs
+          goSplit s0 (beforeEs <> (targetE :<| nextBeforeEs)) afterEs
         Just b -> do
-          mres <- runParserT (handler b) s
+          mres <- runParserT (handler b) s0
           case mres of
             Nothing ->
               -- No results from handled error - find next custom error
-              goSplit (beforeEs <> nextBeforeEs) afterEs
+              goSplit s0 (beforeEs <> nextBeforeEs) afterEs
             Just res ->
               case res of
                 ParseResultSuccess _ -> pure mres
                 ParseResultError es ->
                   -- Add to list of errors and find next custom error
-                  goSplit (beforeEs <> nextBeforeEs <> NESeq.toSeq es) afterEs
+                  goSplit s0 (beforeEs <> nextBeforeEs <> NESeq.toSeq es) afterEs
 
 -- | Throws a custom error
 throwParser :: Monad m => e -> ParserT l s e m a
