@@ -1,7 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module SimpleParser.Explain where
+module SimpleParser.Explain
+  ( ExplainLabel (..)
+  , ErrorExplanation (..)
+  , ExplainError (..)
+  , Explainable
+  , ParseErrorExplanation (..)
+  , explainParseError
+  , buildParseErrorExplanation
+  , buildAllParseErrorExplanations
+  ) where
 
 import Control.Monad (join)
 import Data.Foldable (toList)
@@ -39,11 +48,11 @@ instance ExplainLabel l => ExplainLabel (CompoundTextLabel l) where
       CompoundTextLabelText l -> explainLabel l
       CompoundTextLabelCustom l -> explainLabel l
 
-data ErrorExplanation = ErrorExplanation
-  { eeReason :: !Builder
-  , eeExpected :: !(Maybe Builder)
-  , eeActual :: !(Maybe Builder)
-  }
+data ErrorExplanation  = ErrorExplanation
+  { eeReason :: !Text
+  , eeExpected :: !(Maybe Text)
+  , eeActual :: !(Maybe Text)
+  } deriving (Eq, Show)
 
 class ExplainError e where
   explainError :: e -> ErrorExplanation
@@ -51,62 +60,68 @@ class ExplainError e where
 instance ExplainError Void where
   explainError = absurd
 
-endMsg :: Builder
+endMsg :: Text
 endMsg = "end of stream"
 
 tokB :: Char -> Builder
 tokB t = "token '" <> TB.char t <> "'"
 
-mayTokB :: Maybe Char -> Builder
-mayTokB = maybe endMsg tokB
+tokT :: Char -> Text
+tokT = TB.run . tokB
+
+mayTokT :: Maybe Char -> Text
+mayTokT = maybe endMsg tokT
 
 chunkB :: TextualChunked chunk => chunk -> Builder
 chunkB k = "chunk \"" <> buildChunk k <> "\""
 
-mayChunkB :: TextualChunked chunk => Maybe chunk -> Builder
-mayChunkB = maybe endMsg chunkB
+chunkT :: TextualChunked chunk => chunk -> Text
+chunkT = TB.run . chunkB
+
+mayChunkT :: TextualChunked chunk => Maybe chunk -> Text
+mayChunkT = maybe endMsg chunkT
 
 instance (Token s ~ Char, TextualChunked (Chunk s)) => ExplainError (StreamError s) where
   explainError (StreamError re) =
     case re of
       RawErrorMatchEnd actTok ->
-        ErrorExplanation "failed to match end of stream" (Just endMsg) (Just (tokB actTok))
+        ErrorExplanation "failed to match end of stream" (Just endMsg) (Just (tokT actTok))
       RawErrorAnyToken ->
         ErrorExplanation "failed to match any token" (Just "any token") (Just endMsg)
       RawErrorAnyChunk ->
         ErrorExplanation "failed to match any chunk" (Just "any chunk") (Just endMsg)
       RawErrorSatisfyToken mayActTok ->
-        ErrorExplanation "failed to satisfy token predicate" Nothing (Just (mayTokB mayActTok))
+        ErrorExplanation "failed to satisfy token predicate" Nothing (Just (mayTokT mayActTok))
       RawErrorMatchToken expTok mayActTok ->
-        ErrorExplanation "failed to match token" (Just (tokB expTok)) (Just (mayTokB mayActTok))
+        ErrorExplanation "failed to match token" (Just (tokT expTok)) (Just (mayTokT mayActTok))
       RawErrorMatchChunk expChunk mayActChunk ->
-        ErrorExplanation "failed to match chunk" (Just (chunkB expChunk)) (Just (mayChunkB mayActChunk))
+        ErrorExplanation "failed to match chunk" (Just (chunkT expChunk)) (Just (mayChunkT mayActChunk))
       RawErrorTakeTokensWhile1 mayActTok ->
-        ErrorExplanation "failed to take 1 or more tokens" Nothing (Just (mayTokB mayActTok))
+        ErrorExplanation "failed to take 1 or more tokens" Nothing (Just (mayTokT mayActTok))
       RawErrorDropTokensWhile1 mayActTok ->
-        ErrorExplanation "failed to drop 1 or more tokens" Nothing (Just (mayTokB mayActTok))
+        ErrorExplanation "failed to drop 1 or more tokens" Nothing (Just (mayTokT mayActTok))
 
 instance (Token s ~ Char, TextualChunked (Chunk s), ExplainError e) => ExplainError (CompoundError s e) where
   explainError ce =
     case ce of
       CompoundErrorStream se -> explainError se
-      CompoundErrorFail msg -> ErrorExplanation (TB.text msg) Nothing Nothing
+      CompoundErrorFail msg -> ErrorExplanation msg Nothing Nothing
       CompoundErrorCustom e -> explainError e
 
 type Explainable l s e = (TextualStream s, ExplainLabel l, ExplainError e)
 
 data ParseErrorExplanation p = ParseErrorExplanation
   { peeSpan :: !(Span p)
-  , peeContext :: !(Seq Builder)
-  , peeDetails :: !(Maybe Builder)
+  , peeContext :: !(Seq Text)
+  , peeDetails :: !(Maybe Text)
   , peeErrExp :: !ErrorExplanation
-  }
+  } deriving (Eq, Show)
 
 explainParseError :: Explainable l s e => ParseError l s e -> ParseErrorExplanation (Pos s)
 explainParseError pe =
   let (mayLab, sp) = parseErrorNarrowestSpan pe
-      context = fmap explainLabel (parseErrorEnclosingLabels pe)
-      mayDetails = fmap explainLabel mayLab
+      context = fmap explainLabelText (parseErrorEnclosingLabels pe)
+      mayDetails = fmap explainLabelText mayLab
       errExp = explainError (peError pe)
   in ParseErrorExplanation sp context mayDetails errExp
 
@@ -116,19 +131,19 @@ buildSpan (Span (LinePos _ sl sc) (LinePos _ el ec)) =
 
 buildErrorExplanation :: Maybe Builder -> ErrorExplanation -> [Builder]
 buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual) = join
-  [ ["[Reason  ] " <> reason]
+  [ ["[Reason  ] " <> TB.text reason]
   , maybe [] (\de -> ["[Details ] " <> de]) mayDetails
-  , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
-  , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
+  , maybe [] (\ex -> ["[Expected] " <> TB.text ex]) mayExpected
+  , maybe [] (\ac -> ["[Actual  ] " <> TB.text ac]) mayActual
   ]
 
 buildParseErrorExplanation :: ParseErrorExplanation LinePos -> Builder
 buildParseErrorExplanation (ParseErrorExplanation sp context mayDetails errExp) =
   let hd = join
         [ ["[Pos       ] " <> buildSpan sp]
-        , ["[Context   ] || " <> TB.intercalate " |> " context | not (Seq.null context)]
+        , ["[Context   ] || " <> TB.intercalate " |> " (fmap TB.text (toList context)) | not (Seq.null context)]
         ]
-      tl = buildErrorExplanation mayDetails errExp
+      tl = buildErrorExplanation (fmap TB.text mayDetails) errExp
   in TB.intercalate "\n" (hd ++ tl)
 
 buildAllParseErrorExplanations :: Foldable f => f (ParseErrorExplanation LinePos) -> Builder

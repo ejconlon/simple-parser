@@ -1,5 +1,5 @@
 name:                simple-parser
-version:             0.4.0
+version:             0.5.0
 github:              "ejconlon/simple-parser"
 license:             BSD3
 author:              "Eric Conlon"
@@ -26,19 +26,20 @@ dependencies:
 - text-builder >= 0.6 && < 0.7
 
 default-extensions:
-  - BangPatterns
-  - ConstraintKinds
-  - DeriveFunctor
-  - DeriveFoldable
-  - DeriveTraversable
-  - DerivingStrategies
-  - FlexibleContexts
-  - FlexibleInstances
-  - FunctionalDependencies
-  - GeneralizedNewtypeDeriving
-  - KindSignatures
-  - MultiParamTypeClasses
-  - TypeFamilies
+- BangPatterns
+- ConstraintKinds
+- DeriveFunctor
+- DeriveFoldable
+- DeriveTraversable
+- DerivingStrategies
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GeneralizedNewtypeDeriving
+- KindSignatures
+- MultiParamTypeClasses
+- StandaloneDeriving
+- TypeFamilies
 
 ghc-options:
 - -Wall
