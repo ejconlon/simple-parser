@@ -1,7 +1,7 @@
-resolver: lts-17.10
+resolver: lts-17.15
+
+ghc-options:
+  "$everything": -haddock
 
 packages:
 - .
-
-# extra-deps:
-# - errata-0.2.0.0
