@@ -13,4 +13,4 @@ In this case, our lists are are little fancier.
 
 ## License
 
-This project is BSD-licenced. Some gnarly functions to parse numbers and such have been adapted from Megaparsec, which is also [BSD-licensed](https://github.com/mrkkrp/megaparsec/blob/master/LICENSE.md).
+This project is BSD-licensed. Some gnarly functions to parse numbers and such have been adapted from Megaparsec, which is also [BSD-licensed](https://github.com/mrkkrp/megaparsec/blob/master/LICENSE.md).
