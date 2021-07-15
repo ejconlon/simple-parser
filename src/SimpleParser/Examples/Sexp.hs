@@ -103,7 +103,7 @@ floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
 atomB :: SexpParserC s => SexpParserB s Atom
-atomB = MatchBlock (DefaultCase Nothing (fail "failed to parse sexp atom"))
+atomB = MatchBlock (DefaultCase Nothing (const (fail "failed to parse sexp atom")))
   [ MatchCase Nothing (void (matchToken '"')) (fmap AtomString stringP)
   , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomInt intP)
   , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomFloat floatP)
