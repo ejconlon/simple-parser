@@ -13,15 +13,15 @@ module SimpleParser.Examples.Sexp
 
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
-import Data.Foldable (asum)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), Parser, TextLabel, TextualStream,
-                     betweenParser, commitParser, decimalParser, escapedStringParser, lexemeParser, matchToken,
-                     onEmptyParser, orParser, packChunk, satisfyToken, scientificParser, sepByParser,
-                     signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
+import SimpleParser (Chunked (..), DefaultCase (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..),
+                     MatchCase (..), Parser, PureMatchBlock, TextLabel, TextualStream, betweenParser, commitParser,
+                     decimalParser, escapedStringParser, lexemeParser, lookAheadMatch, matchToken, onEmptyParser,
+                     orParser, packChunk, satisfyToken, scientificParser, sepByParser, signedNumStartPred, signedParser,
+                     spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
@@ -53,6 +53,8 @@ newtype Sexp = Sexp { unSexp :: SexpF Sexp }
   deriving (Eq, Show)
 
 type SexpParserC s = TextualStream s
+
+type SexpParserB s a = PureMatchBlock SexpLabel s Void a
 
 type SexpParserM s a = Parser SexpLabel s Void a
 
@@ -100,13 +102,16 @@ intP = signedParser (pure ()) decimalParser
 floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
-atomP :: SexpParserC s => SexpParserM s Atom
-atomP = lexP $ asum
-  [ commitParser (void (matchToken '"')) (fmap AtomString stringP)
-  , commitParser (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomInt intP)
-  , commitParser (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomFloat floatP)
-  , commitParser (void (satisfyToken Nothing identStartPred)) (fmap AtomIdent identifierP)
+atomB :: SexpParserC s => SexpParserB s Atom
+atomB = MatchBlock (DefaultCase Nothing (fail "failed to parse sexp atom"))
+  [ MatchCase Nothing (void (matchToken '"')) (fmap AtomString stringP)
+  , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomInt intP)
+  , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomFloat floatP)
+  , MatchCase Nothing (void (satisfyToken Nothing identStartPred)) (fmap AtomIdent identifierP)
   ]
+
+atomP :: SexpParserC s => SexpParserM s Atom
+atomP = lexP (lookAheadMatch atomB)
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)
 listP root = lexP (betweenParser openParenP closeParenP (sepByParser root spaceP))
