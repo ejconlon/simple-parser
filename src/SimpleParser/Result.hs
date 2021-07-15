@@ -13,11 +13,12 @@ module SimpleParser.Result
   , parseErrorNarrowestSpan
   , ParseSuccess (..)
   , ParseResult (..)
+  , matchSoleParseError
   ) where
 
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
-import Data.Sequence.NonEmpty (NESeq)
+import Data.Sequence.NonEmpty (NESeq (..))
 import Data.Text (Text)
 import SimpleParser.Stack (Stack (..), bottomStack, emptyStack, pushStack, topStack)
 import SimpleParser.Stream (Span (..), Stream (..))
@@ -105,3 +106,12 @@ data ParseResult l s e a =
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseResult l s e a)
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseResult l s e a)
+
+-- | If there is one parse error, return it, otherwise return nothing.
+-- Errors can accumulate if you use unrestricted branching (with 'orParser' or 'Alternative' '<|>') or manual 'Parser' constructor application.
+-- However, if you always branch with 'lookAheadMatch' then you will have singleton parse errors, and this will always return 'Just'.
+matchSoleParseError :: NESeq (ParseError l s e) -> Maybe (ParseError l s e)
+matchSoleParseError es =
+  case es of
+    e :<|| Empty -> Just e
+    _ -> Nothing
