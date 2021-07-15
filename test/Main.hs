@@ -103,8 +103,8 @@ test_fail :: [TestTree]
 test_fail =
   let parser = fail "i give up" :: TestParser Int
       cases =
-        [ ParserCase "empty" parser "" (errRes [(failErr (OffsetStream 0 "") "i give up")])
-        , ParserCase "non-empty" parser "hi" (errRes [(failErr (OffsetStream 0 "hi") "i give up")])
+        [ ParserCase "empty" parser "" (errRes [failErr (OffsetStream 0 "") "i give up"])
+        , ParserCase "non-empty" parser "hi" (errRes [failErr (OffsetStream 0 "hi") "i give up"])
         ]
   in fmap testParserCase cases
 

@@ -184,6 +184,8 @@ catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >
           -- Not handling error;  - find next custom error
           goSplit s0 (beforeEs <> (targetE :<| nextBeforeEs)) afterEs
         Just b -> do
+          -- NOTE(ejconlon) We resume parsing at the start state s0 (captured at catchError invocation)
+          -- Is it reasonable to support parsing at the error state? (This is in the SeqPartition wildcard above)
           mres <- runParserT (handler b) s0
           case mres of
             Nothing ->

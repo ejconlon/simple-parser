@@ -9,6 +9,7 @@ module SimpleParser
   , module SimpleParser.Explain
   , module SimpleParser.Input
   , module SimpleParser.Interactive
+  , module SimpleParser.LookAhead
   , module SimpleParser.Parser
   , module SimpleParser.Result
   , module SimpleParser.Stack
@@ -20,6 +21,7 @@ import SimpleParser.Common
 import SimpleParser.Explain
 import SimpleParser.Input
 import SimpleParser.Interactive
+import SimpleParser.LookAhead
 import SimpleParser.Parser
 import SimpleParser.Result
 import SimpleParser.Stack
