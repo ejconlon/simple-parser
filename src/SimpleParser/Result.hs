@@ -21,7 +21,7 @@ import qualified Data.Sequence as Seq
 import Data.Sequence.NonEmpty (NESeq (..))
 import Data.Text (Text)
 import SimpleParser.Stack (Stack (..), bottomStack, emptyStack, pushStack, topStack)
-import SimpleParser.Stream (Span (..), Stream (..))
+import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
 data RawError chunk token =
     RawErrorMatchEnd !token
@@ -79,7 +79,7 @@ unmarkParseError :: ParseError l s e -> ParseError l s e
 unmarkParseError pe = pe { peMarkStack = emptyStack }
 
 -- | Returns the narrowest span
-parseErrorNarrowestSpan :: Stream s => ParseError l s e -> (Maybe l, Span (Pos s))
+parseErrorNarrowestSpan :: PosStream s => ParseError l s e -> (Maybe l, Span (Pos s))
 parseErrorNarrowestSpan pe = (ml, Span startPos endPos) where
   endPos = streamViewPos (peEndState pe)
   (ml, startPos) = maybe (Nothing, endPos) (\(Mark mx s) -> (mx, streamViewPos s)) (bottomStack (peMarkStack pe))

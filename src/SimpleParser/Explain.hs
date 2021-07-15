@@ -22,7 +22,7 @@ import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (CompoundTextLabel (..), TextLabel (..))
 import SimpleParser.Result (CompoundError (..), ParseError (..), RawError (..), StreamError (..),
                             parseErrorEnclosingLabels, parseErrorNarrowestSpan)
-import SimpleParser.Stream (LinePos (..), Span (..), Stream (..), TextualStream)
+import SimpleParser.Stream (LinePos (..), PosStream (..), Span (..), Stream (..), TextualStream)
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
 
@@ -108,7 +108,7 @@ instance (Token s ~ Char, TextualChunked (Chunk s), ExplainError e) => ExplainEr
       CompoundErrorFail msg -> ErrorExplanation msg Nothing Nothing
       CompoundErrorCustom e -> explainError e
 
-type Explainable l s e = (TextualStream s, ExplainLabel l, ExplainError e)
+type Explainable l s e = (TextualStream s, PosStream s, ExplainLabel l, ExplainError e)
 
 data ParseErrorExplanation p = ParseErrorExplanation
   { peeSpan :: !(Span p)

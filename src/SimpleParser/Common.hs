@@ -30,7 +30,7 @@ import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
 import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser, orParser)
-import SimpleParser.Stream (Span (..), Stream (..))
+import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
 -- | Enumeration of common labels in textual parsing.
 data TextLabel =
@@ -187,7 +187,7 @@ escapedStringParser quoteChar =
   in betweenParser quoteParser quoteParser innerParser
 
 -- | Adds span information to parsed values.
-spanParser :: (Stream s, Monad m) => (Span (Pos s) -> a -> b) -> ParserT l s e m a -> ParserT l s e m b
+spanParser :: (PosStream s, Monad m) => (Span (Pos s) -> a -> b) -> ParserT l s e m a -> ParserT l s e m b
 spanParser f p = do
   start <- get
   val <- p
@@ -195,5 +195,5 @@ spanParser f p = do
   pure (f (Span (streamViewPos start) (streamViewPos end)) val)
 
 -- | Gets the current stream position
-getStreamPos :: (Stream s, Monad m) => ParserT l s e m (Pos s)
+getStreamPos :: (PosStream s, Monad m) => ParserT l s e m (Pos s)
 getStreamPos = gets streamViewPos

@@ -2,9 +2,10 @@
 -- See <https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Stream.html Text.Megaparsec.Stream>.
 module SimpleParser.Stream
   ( Stream (..)
-  , TextualStream
   , defaultStreamDropN
   , defaultStreamDropWhile
+  , TextualStream
+  , PosStream (..)
   , Offset (..)
   , OffsetStream (..)
   , newOffsetStream
@@ -25,14 +26,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import SimpleParser.Chunked (Chunked (..), TextualChunked (..))
 
--- | 'Stream' lets us peel off tokens and chunks for parsing
--- with explicit state passing.
+-- | 'Stream' lets us peel off tokens and chunks for parsing with explicit state passing.
 class Chunked (Chunk s) (Token s) => Stream s where
   type family Chunk s :: Type
   type family Token s :: Type
-  type family Pos s :: Type
-
-  streamViewPos :: s -> Pos s
 
   streamTake1 :: s -> Maybe (Token s, s)
   streamTakeN :: Int -> s -> Maybe (Chunk s, s)
@@ -55,9 +52,7 @@ type TextualStream s = (Stream s, Token s ~ Char, TextualChunked (Chunk s))
 instance Stream [a] where
   type instance Chunk [a] = [a]
   type instance Token [a] = a
-  type instance Pos [a] = ()
 
-  streamViewPos = const ()
   streamTake1 = unconsChunk
   streamTakeN n s
     | n <= 0 = Just ([], s)
@@ -68,9 +63,7 @@ instance Stream [a] where
 instance Stream (Seq a) where
   type instance Chunk (Seq a) = Seq a
   type instance Token (Seq a) = a
-  type instance Pos (Seq a) = ()
 
-  streamViewPos = const ()
   streamTake1 = unconsChunk
   streamTakeN n s
     | n <= 0 = Just (Seq.empty, s)
@@ -83,15 +76,19 @@ instance Stream (Seq a) where
 instance Stream Text where
   type instance Chunk Text = Text
   type instance Token Text = Char
-  type instance Pos Text = ()
 
-  streamViewPos = const ()
   streamTake1 = T.uncons
   streamTakeN n s
     | n <= 0 = Just (T.empty, s)
     | T.null s = Nothing
     | otherwise = Just (T.splitAt n s)
   streamTakeWhile = T.span
+
+-- | 'PosStream' adds position tracking to a 'Stream'.
+class Stream s => PosStream s where
+  type family Pos s :: Type
+
+  streamViewPos :: s -> Pos s
 
 newtype Offset = Offset { unOffset :: Int }
   deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
@@ -105,9 +102,6 @@ data OffsetStream s = OffsetStream
 instance Stream s => Stream (OffsetStream s) where
   type instance Chunk (OffsetStream s) = Chunk s
   type instance Token (OffsetStream s) = Token s
-  type instance Pos (OffsetStream s) = Offset
-
-  streamViewPos (OffsetStream o _) = o
   streamTake1 (OffsetStream o s) = fmap (second (OffsetStream (succ o))) (streamTake1 s)
   streamTakeN n (OffsetStream (Offset x) s) = fmap go (streamTakeN n s) where
     go (a, b) = (a, OffsetStream (Offset (x + chunkLength a)) b)
@@ -119,6 +113,11 @@ instance Stream s => Stream (OffsetStream s) where
   streamDropWhile pcate (OffsetStream (Offset x) s) =
     let (m, b) = streamDropWhile pcate s
     in (m, OffsetStream (Offset (x + m)) b)
+
+instance Stream s => PosStream (OffsetStream s) where
+  type instance Pos (OffsetStream s) = Offset
+
+  streamViewPos (OffsetStream o _) = o
 
 newOffsetStream :: s -> OffsetStream s
 newOffsetStream = OffsetStream 0
@@ -157,9 +156,6 @@ data LinePosStream s = LinePosStream
 instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
   type instance Chunk (LinePosStream s) = Chunk s
   type instance Token (LinePosStream s) = Token s
-  type instance Pos (LinePosStream s) = LinePos
-
-  streamViewPos (LinePosStream p _) = p
   streamTake1 (LinePosStream p s) = fmap (\(a, b) -> (a, LinePosStream (incrLinePosToken p a) b)) (streamTake1 s)
   streamTakeN n (LinePosStream p s) = fmap go (streamTakeN n s) where
     go (a, b) = (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
@@ -168,6 +164,11 @@ instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
     in (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
 
   -- Drops can't be specialized because we need to examine each character for newlines.
+
+instance (Stream s, Token s ~ Char) => PosStream (LinePosStream s) where
+  type instance Pos (LinePosStream s) = LinePos
+
+  streamViewPos (LinePosStream p _) = p
 
 newLinePosStream :: s -> LinePosStream s
 newLinePosStream = LinePosStream initLinePos
