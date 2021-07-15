@@ -11,11 +11,12 @@ module SimpleParser.LookAhead
   , MatchPos (..)
   , LookAheadTestResult (..)
   , lookAheadTest
+  , pureLookAheadTest
   , lookAheadChunk
   ) where
 
 import Control.Monad (void)
-import Control.Monad.Identity (Identity)
+import Control.Monad.Identity (Identity (runIdentity))
 import Data.Sequence (Seq (..))
 import Data.Sequence.NonEmpty (NESeq)
 import qualified Data.Sequence.NonEmpty as NESeq
@@ -86,7 +87,10 @@ lookAheadTest (MatchBlock (DefaultCase dcl _) mcs) = go Empty 0 mcs where
     mres <- runParserT mcg s
     case mres of
       Just (ParseResultSuccess _) -> go (acc :|> MatchPos i mcl) (i + 1) mcs' s
-      _ -> go acc i mcs' s
+      _ -> go acc (i + 1) mcs' s
+
+pureLookAheadTest :: PureMatchBlock l s e a -> s -> LookAheadTestResult l
+pureLookAheadTest mb = runIdentity . lookAheadTest mb
 
 -- | Simple look-ahead that matches by chunk.
 lookAheadChunk :: (Stream s, Monad m, Eq (Chunk s)) => [(Chunk s, ParserT l s e m a)] -> ParserT l s e m a -> ParserT l s e m a
