@@ -21,6 +21,7 @@ module SimpleParser.Parser
   , greedyPlusParser_
   , defaultParser
   , optionalParser
+  , reflectParser
   , silenceParser
   , lookAheadParser
   , markParser
@@ -237,6 +238,13 @@ defaultParser val parser = orParser parser (pure val)
 -- wraps success in 'Just'.
 optionalParser :: Monad m => ParserT l s e m a -> ParserT l s e m (Maybe a)
 optionalParser parser = defaultParser Nothing (fmap Just parser)
+
+-- | Run the parser speculatively and return results. Does not advance state or throw errors.
+reflectParser :: Monad m => ParserT l s e m a -> ParserT l s e m (Maybe (ParseResult l s e a))
+reflectParser parser = ParserT go where
+  go s0 = do
+    mres <- runParserT parser s0
+    pure (Just (ParseResultSuccess (ParseSuccess s0 mres)))
 
 -- | Removes all failures from the parse results. Catches more errors than 'catchError (const empty)'
 -- because this includes stream errors, not just custom errors.
