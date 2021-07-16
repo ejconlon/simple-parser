@@ -4,6 +4,7 @@ module SimpleParser.Stack
   , pushStack
   , topStack
   , bottomStack
+  , bottomUpStack
   ) where
 
 import Data.Sequence (Seq (..))
@@ -36,3 +37,13 @@ bottomStack (Stack s) =
   case s of
     Empty -> Nothing
     a :<| _ -> Just a
+
+-- | Selects elements from the bottom of the stack to the top.
+bottomUpStack :: (a -> Maybe b) -> Stack a -> Seq b
+bottomUpStack f = go Empty . unStack where
+  go !acc s =
+    case s of
+      Empty -> acc
+      a :<| s' ->
+        let acc' = maybe acc (acc :|>) (f a)
+        in go acc' s'

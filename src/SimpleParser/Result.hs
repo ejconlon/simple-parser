@@ -3,10 +3,12 @@
 module SimpleParser.Result
   ( RawError (..)
   , StreamError (..)
+  , coerceStreamError
   , CompoundError (..)
   , Mark (..)
   , ParseError (..)
   , parseErrorResume
+  , parseErrorLabels
   , markParseError
   , unmarkParseError
   , parseErrorEnclosingLabels
@@ -20,7 +22,7 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Sequence.NonEmpty (NESeq (..))
 import Data.Text (Text)
-import SimpleParser.Stack (Stack (..), bottomStack, emptyStack, pushStack, topStack)
+import SimpleParser.Stack (Stack (..), bottomStack, bottomUpStack, emptyStack, pushStack, topStack)
 import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
 data RawError chunk token =
@@ -43,6 +45,9 @@ newtype StreamError s = StreamError
 deriving instance (Eq (Token s), Eq (Chunk s)) => Eq (StreamError s)
 deriving instance (Show (Token s), Show (Chunk s)) => Show (StreamError s)
 
+coerceStreamError :: (Chunk s ~ Chunk t, Token s ~ Token t) => StreamError s -> StreamError t
+coerceStreamError = StreamError . unStreamError
+
 data CompoundError s e =
     CompoundErrorStream !(StreamError s)
   | CompoundErrorFail !Text
@@ -59,6 +64,10 @@ data Mark l s = Mark
 
 type MarkStack l s = Stack (Mark l s)
 
+-- | Returns a sequence of labels from most general to most specific.
+markStackLabels :: MarkStack l s -> Seq l
+markStackLabels = bottomUpStack markLabel
+
 data ParseError l s e = ParseError
   { peMarkStack :: !(MarkStack l s)
   , peEndState :: !s
@@ -69,6 +78,10 @@ data ParseError l s e = ParseError
 -- If it has been marked, we use that, otherwise we assume it starts at the exact error point.
 parseErrorResume :: ParseError l s e -> s
 parseErrorResume pe = maybe (peEndState pe) markState (topStack (peMarkStack pe))
+
+-- | Returns the sequence of labels from most general to most specific.
+parseErrorLabels :: ParseError l s e -> Seq l
+parseErrorLabels = markStackLabels . peMarkStack
 
 -- | Updates a 'ParseError' with a resumption point.
 markParseError :: Mark l s -> ParseError l s e -> ParseError l s e
