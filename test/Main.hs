@@ -1,3 +1,4 @@
+{-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -630,8 +631,7 @@ test_json =
         ]
   in testJsonTrees cases
 
--- type SexpResult = Maybe Sexp
-type SexpResult = Either String Sexp
+type SexpResult = Maybe Sexp
 
 testSexpCase :: TestName -> Text -> SexpResult -> TestTree
 testSexpCase name str expected = testCase ("sexp " <> name) $ do
@@ -645,18 +645,35 @@ parseSexp :: Text -> SexpResult
 parseSexp str =
   let p = sexpParser <* matchEnd
   in case runParser p str of
-    Just (ParseResultSuccess (ParseSuccess _ a)) -> pure a
-    x -> Left (show x)
+    Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a
+    _ -> Nothing
 
 test_sexp :: [TestTree]
 test_sexp =
-  let cases =
-        -- [ ("empty", "", Nothing)
-        [ ("empty list", "()", pure (Sexp (SexpList Empty)))
-        , ("num", "1", pure (Sexp (SexpAtom (AtomInt 1))))
-        , ("ident", "xyz", pure (Sexp (SexpAtom (AtomIdent "xyz"))))
-        , ("string", "\"xyz\"", pure (Sexp (SexpAtom (AtomString "xyz"))))
-        , ("float", "3.14", pure (Sexp (SexpAtom (AtomFloat 3.14))))
+  let numSexp = Sexp (SexpAtom (AtomInt 1))
+      identSexp = Sexp (SexpAtom (AtomIdent "abc"))
+      stringSexp = Sexp (SexpAtom (AtomString "xyz"))
+      floatSexp = Sexp (SexpAtom (AtomFloat 3.14))
+      emptyList = Sexp (SexpList Empty)
+      singletonList = Sexp (SexpList (Seq.singleton numSexp))
+      pairList = Sexp (SexpList (Seq.fromList [numSexp, numSexp]))
+      cases =
+        [ ("empty", "", Nothing)
+        , ("empty list", "()", Just emptyList)
+        , ("singleton list", "(1)", Just singletonList)
+        , ("singleton empty list", "(())", Just (Sexp (SexpList (Seq.fromList [emptyList]))))
+        , ("singleton nested list", "((1))", Just (Sexp (SexpList (Seq.fromList [singletonList]))))
+        , ("num", "1", Just numSexp)
+        , ("ident", "abc", Just identSexp)
+        , ("string", "\"xyz\"", Just stringSexp)
+        , ("float", "3.14", Just floatSexp)
+        , ("float pos", "+3.14", Just floatSexp)
+        , ("float neg", "-3.14", Just (Sexp (SexpAtom (AtomFloat -3.14))))
+        -- TODO(ejconlon) support these
+        -- , ("plus", "+", Just (Sexp (SexpAtom (AtomIdent "+"))))
+        -- , ("minus", "-", Just (Sexp (SexpAtom (AtomIdent "-"))))
+        , ("multi list", "(1 abc \"xyz\" 3.14)", Just (Sexp (SexpList (Seq.fromList [numSexp, identSexp, stringSexp, floatSexp]))))
+        , ("pair nested list", "((1 1) (1 1))", Just (Sexp (SexpList (Seq.fromList [pairList, pairList]))))
         ]
   in testSexpTrees cases
 
