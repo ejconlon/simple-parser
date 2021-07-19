@@ -24,7 +24,7 @@ errataExplanation style fp (ParseErrorExplanation sp context mayDetails  (ErrorE
       mayHeader =
        case context of
          Empty -> Nothing
-         _ -> Just (T.intercalate " |> " (toList context))
+         _ -> Just (T.intercalate " > " (toList context))
       start = (startLine + 1, startCol + 1, mayLabel)
       end = (endLine + 1, endCol + 1, Nothing)
       mayBody =

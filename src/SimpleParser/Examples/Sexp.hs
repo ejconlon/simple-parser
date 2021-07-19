@@ -20,9 +20,9 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
 import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     TextLabel, TextualStream, applySign, betweenParser, commitParser, escapedStringParser,
-                     lexemeParser, lookAheadMatch, matchToken, numParser, onEmptyParser, orParser, packChunk, popChunk,
-                     satisfyToken, sepByParser, signParser, signedNumStartPred, spaceParser, takeTokensWhile)
+                     TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser, lexemeParser,
+                     lookAheadMatch, matchToken, numParser, packChunk, popChunk, satisfyToken, sepByParser, signParser,
+                     signedNumStartPred, spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
@@ -63,9 +63,10 @@ sexpParser :: SexpParserC s => SexpParserM s Sexp
 sexpParser = let p = fmap Sexp (recSexpParser p) in p
 
 recSexpParser :: SexpParserC s => SexpParserM s a -> SexpParserM s (SexpF a)
-recSexpParser root = onEmptyParser (orParser lp ap) (fail "failed to parse sexp document") where
-  lp = commitParser openParenP (fmap SexpList (listP root))
-  ap = fmap SexpAtom atomP
+recSexpParser root = lookAheadMatch block where
+  block = MatchBlock anyToken (fmap SexpAtom atomP)
+    [ MatchCase Nothing (== '(') (fmap SexpList (listP root))
+    ]
 
 nonDelimPred :: Char -> Bool
 nonDelimPred c = c /= '(' && c /= ')' && not (isSpace c)

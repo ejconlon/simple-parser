@@ -140,8 +140,8 @@ buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual)
 buildParseErrorExplanation :: ParseErrorExplanation LinePos -> Builder
 buildParseErrorExplanation (ParseErrorExplanation sp context mayDetails errExp) =
   let hd = join
-        [ ["[Pos       ] " <> buildSpan sp]
-        , ["[Context   ] || " <> TB.intercalate " |> " (fmap TB.text (toList context)) | not (Seq.null context)]
+        [ ["[Pos     ] " <> buildSpan sp]
+        , ["[Context ] " <> TB.intercalate " > " (fmap TB.text (toList context)) | not (Seq.null context)]
         ]
       tl = buildErrorExplanation (fmap TB.text mayDetails) errExp
   in TB.intercalate "\n" (hd ++ tl)
