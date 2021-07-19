@@ -13,20 +13,19 @@ module SimpleParser.Examples.Sexp
 
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
-import Data.Scientific (Scientific)
+import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser (Chunked (..), DefaultCase (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..),
-                     MatchCase (..), Parser, PureMatchBlock, TextLabel, TextualStream, betweenParser, commitParser,
-                     decimalParser, escapedStringParser, lexemeParser, lookAheadMatch, matchToken, onEmptyParser,
-                     orParser, packChunk, satisfyToken, scientificParser, sepByParser, signedNumStartPred, signedParser,
-                     spaceParser, takeTokensWhile)
+import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
+                     TextLabel, TextualStream, anyToken, betweenParser, commitParser, escapedStringParser, lexemeParser,
+                     lookAheadMatch, matchToken, onEmptyParser, orParser, packChunk, satisfyToken, scientificParser,
+                     sepByParser, signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
   | AtomString !Text
-  | AtomInt !Integer
+  | AtomInt !Int
   | AtomFloat !Scientific
   deriving (Eq, Show)
 
@@ -38,6 +37,7 @@ data SexpF a =
 data SexpLabel =
     SexpLabelIdentStart
   | SexpLabelEmbedText !TextLabel
+  | SexpLabelCustom !Text
   deriving (Eq, Show)
 
 instance ExplainLabel SexpLabel where
@@ -45,6 +45,7 @@ instance ExplainLabel SexpLabel where
     case sl of
       SexpLabelIdentStart -> "start of identifier"
       SexpLabelEmbedText tl -> explainLabel tl
+      _ -> undefined
 
 instance EmbedTextLabel SexpLabel where
   embedTextLabel = SexpLabelEmbedText
@@ -53,8 +54,6 @@ newtype Sexp = Sexp { unSexp :: SexpF Sexp }
   deriving (Eq, Show)
 
 type SexpParserC s = TextualStream s
-
-type SexpParserB s a = PureMatchBlock SexpLabel s Void a
 
 type SexpParserM s a = Parser SexpLabel s Void a
 
@@ -96,22 +95,25 @@ openParenP = lexP (void (matchToken '('))
 closeParenP :: SexpParserC s => SexpParserM s ()
 closeParenP = lexP (void (matchToken ')'))
 
-intP :: SexpParserC s => SexpParserM s Integer
-intP = signedParser (pure ()) decimalParser
-
 floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
-atomB :: SexpParserC s => SexpParserB s Atom
-atomB = MatchBlock (DefaultCase Nothing (const (fail "failed to parse sexp atom")))
-  [ MatchCase Nothing (void (matchToken '"')) (fmap AtomString stringP)
-  , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomInt intP)
-  , MatchCase Nothing (void (satisfyToken Nothing signedNumStartPred)) (fmap AtomFloat floatP)
-  , MatchCase Nothing (void (satisfyToken Nothing identStartPred)) (fmap AtomIdent identifierP)
-  ]
+-- Since intP is a subset of floatP, we ignore errors there and let floatP report them.
+numP :: SexpParserC s => SexpParserM s Atom
+numP = do
+  s <- floatP
+  case toBoundedInteger s of
+    Just i -> pure (AtomInt i)
+    Nothing -> pure (AtomFloat s)
 
 atomP :: SexpParserC s => SexpParserM s Atom
-atomP = lexP (lookAheadMatch atomB)
+atomP = lexP (lookAheadMatch block) where
+  -- TODO allow `+` and `-` identifiers - need to take a 2-chunk for that
+  block = MatchBlock anyToken (fail "failed to parse sexp atom")
+    [ MatchCase Nothing (== '"') (fmap AtomString stringP)
+    , MatchCase Nothing signedNumStartPred numP
+    , MatchCase Nothing identStartPred (fmap AtomIdent identifierP)
+    ]
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)
 listP root = lexP (betweenParser openParenP closeParenP (sepByParser root spaceP))

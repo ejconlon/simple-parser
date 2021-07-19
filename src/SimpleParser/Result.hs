@@ -79,7 +79,7 @@ data ParseError l s e = ParseError
 parseErrorResume :: ParseError l s e -> s
 parseErrorResume pe = maybe (peEndState pe) markState (topStack (peMarkStack pe))
 
--- | Returns the sequence of labels from most general to most specific.
+-- | Returns the sequence of ALL labels from coarsest to finest.
 parseErrorLabels :: ParseError l s e -> Seq l
 parseErrorLabels = markStackLabels . peMarkStack
 
@@ -98,6 +98,7 @@ parseErrorNarrowestSpan pe = (ml, Span startPos endPos) where
   (ml, startPos) = maybe (Nothing, endPos) (\(Mark mx s) -> (mx, streamViewPos s)) (bottomStack (peMarkStack pe))
 
 -- | Returns labels enclosing the narrowest span, from coarsest to finest
+-- Does NOT include the label for the narrowest span (if any).
 parseErrorEnclosingLabels :: ParseError l s e -> Seq l
 parseErrorEnclosingLabels pe =
   case unStack (peMarkStack pe) of

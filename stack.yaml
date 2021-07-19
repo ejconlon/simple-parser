@@ -5,3 +5,6 @@ ghc-options:
 
 packages:
 - .
+
+extra-deps:
+- errata-0.3.0.0

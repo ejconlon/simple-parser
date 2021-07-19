@@ -242,30 +242,31 @@ optionalParser parser = defaultParser Nothing (fmap Just parser)
 -- | Run the parser speculatively and return results. Does not advance state or throw errors.
 reflectParser :: Monad m => ParserT l s e m a -> ParserT l s e m (Maybe (ParseResult l s e a))
 reflectParser parser = ParserT go where
-  go s0 = do
-    mres <- runParserT parser s0
-    pure (Just (ParseResultSuccess (ParseSuccess s0 mres)))
+  go s = do
+    mres <- runParserT parser s
+    pure (Just (ParseResultSuccess (ParseSuccess s mres)))
 
 -- | Removes all failures from the parse results. Catches more errors than 'catchError (const empty)'
 -- because this includes stream errors, not just custom errors.
 -- If you want more fine-grained control, use 'reflectParser' and map over the results.
 silenceParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
-silenceParser parser = ParserT (fmap (>>= go) . runParserT parser) where
-  go res =
-    case res of
-      ParseResultError _ -> Nothing
-      ParseResultSuccess _ -> Just res
+silenceParser parser = ParserT (fmap go . runParserT parser) where
+  go mres =
+    case mres of
+      Just (ParseResultSuccess _) -> mres
+      _ -> Nothing
 
--- | Yield the results of the given parser, but rewind back to the starting state in ALL cases (success and error).
+-- | Yield the results of the given parser, but rewind back to the starting state.
 -- Note that these results may contain errors, so you may want to stifle them with 'silenceParser', for example.
-lookAheadParser :: Monad m => Maybe l -> ParserT l s e m a -> ParserT l s e m a
-lookAheadParser ml parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
+lookAheadParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
+lookAheadParser parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
   go s res =
     case res of
-      ParseResultError es -> ParseResultError (fmap (markParseError (Mark ml s)) es)
+      ParseResultError es -> ParseResultError es
       ParseResultSuccess (ParseSuccess _ a) -> ParseResultSuccess (ParseSuccess s a)
 
--- | Yield the results of the given parser, but rewind back to the starting state on error ONLY.
+-- | Push the label and current state onto the parse error mark stack.
+-- Useful to delimit named sub-spans for error reporting.
 markParser :: Monad m => Maybe l -> ParserT l s e m a -> ParserT l s e m a
 markParser ml parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
   go s res =
@@ -290,9 +291,9 @@ unmarkParser parser = ParserT (fmap (fmap go) . runParserT parser) where
       ParseResultError es -> ParseResultError (fmap unmarkParseError es)
       ParseResultSuccess _ -> res
 
--- | If the first parser succeeds in the given state, yield results from the second parser in the given
--- state. This is likely the look-ahead you want. Use the first parser to check a prefix of input,
--- and use the second to consume that input.
+-- | If the first parser succeeds in the initial state, yield results from the second parser in the initial
+-- state. This is likely the look-ahead you want, since errors from the first parser are completely ignored.
+-- Use the first parser to check a prefix of input, and use the second to consume that input.
 commitParser :: Monad m => ParserT l s e m () -> ParserT l s e m a -> ParserT l s e m a
 commitParser checker parser = do
   s <- get

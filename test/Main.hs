@@ -6,6 +6,7 @@ module Main (main) where
 import Control.Monad (void)
 import Data.Foldable (asum)
 import Data.Functor (($>))
+import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import qualified Data.Sequence.NonEmpty as NESeq
 import Data.String (IsString)
@@ -13,6 +14,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import SimpleParser
 import SimpleParser.Examples.Json (Json (..), JsonF (..), jsonParser)
+import SimpleParser.Examples.Sexp (Atom (..), Sexp (..), SexpF (..), sexpParser)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -23,7 +25,7 @@ newtype Error = Error { unError :: String } deriving (Eq, Show, IsString)
 
 type TestState = OffsetStream Text
 
-type TestBlock a = PureMatchBlock Label TestState Error a
+type TestBlock a b = PureMatchBlock Label TestState Error a b
 
 type TestParser a = Parser Label TestState Error a
 
@@ -35,7 +37,7 @@ type TestParseError = ParseError Label TestState Error
 
 data ParserCase a = ParserCase !TestName !(TestParser a) !Text !(Maybe (TestResult a))
 
-data ExamineCase a = ExamineCase !TestName !(TestBlock a) !Text !(LookAheadTestResult Label)
+data ExamineCase a b = ExamineCase !TestName !(TestBlock a b) !Text !(LookAheadTestResult Label)
 
 fwd :: Int -> TestState -> TestState
 fwd n (OffsetStream (Offset i) t) =
@@ -86,7 +88,7 @@ testParserCase (ParserCase name parser input expected) = testCase name $ do
   let actual = runParser parser (newOffsetStream input)
   actual @?= expected
 
-testExamineCase :: ExamineCase a -> TestTree
+testExamineCase :: ExamineCase a b -> TestTree
 testExamineCase (ExamineCase name block input expected) = testCase name $ do
   let actual = pureLookAheadTest block (newOffsetStream input)
   actual @?= expected
@@ -461,7 +463,7 @@ test_silence_empty =
 
 test_look_ahead_pure :: [TestTree]
 test_look_ahead_pure =
-  let parser = lookAheadParser Nothing (pure 1) :: TestParser Int
+  let parser = lookAheadParser (pure 1) :: TestParser Int
       cases =
         [ ParserCase "empty" parser "" (sucRes (OffsetStream 0 "") 1)
         , ParserCase "non-empty" parser "hi" (sucRes (OffsetStream 0 "hi") 1)
@@ -470,9 +472,9 @@ test_look_ahead_pure =
 
 test_look_ahead_success :: [TestTree]
 test_look_ahead_success =
-  let parser = lookAheadParser Nothing anyToken
+  let parser = lookAheadParser anyToken
       cases =
-        [ ParserCase "non-match empty" parser "" (errRes [markWith (OffsetStream 0 "") (anyTokErr (OffsetStream 0 ""))])
+        [ ParserCase "non-match empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
         , ParserCase "non-empty" parser "hi" (sucRes (OffsetStream 0 "hi") 'h')
         ]
   in fmap testParserCase cases
@@ -480,10 +482,10 @@ test_look_ahead_success =
 test_look_ahead_failure :: [TestTree]
 test_look_ahead_failure =
   let err = Error "boo"
-      parser = lookAheadParser Nothing (anyToken *> throwParser err) :: TestParser Char
+      parser = lookAheadParser (anyToken *> throwParser err) :: TestParser Char
       cases =
-        [ ParserCase "non-match empty" parser "" (errRes [markWith (OffsetStream 0 "") (anyTokErr (OffsetStream 0 ""))])
-        , ParserCase "non-empty" parser "hi" (errRes [markWith (OffsetStream 0 "hi") (custErr (OffsetStream 1 "i") err)])
+        [ ParserCase "non-match empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
+        , ParserCase "non-empty" parser "hi" (errRes [custErr (OffsetStream 1 "i") err])
         ]
   in fmap testParserCase cases
 
@@ -545,19 +547,19 @@ test_drop_while_1 =
         ]
   in fmap testParserCase cases
 
-simpleBlock :: TestBlock Text
-simpleBlock = MatchBlock (DefaultCase (Just (Label "default")) (\misses -> pure ("n misses: " <> T.pack (show (Seq.length misses)))))
-  [ MatchCase (Just (Label "match x")) (void (matchToken 'x')) (anyToken $> "found x - consuming")
-  , MatchCase (Just (Label "match x dupe")) (void (matchToken 'x')) (pure "dupe x - leaving")
-  , MatchCase (Just (Label "match y")) (void (matchToken 'y')) (pure "found y - leaving")
+simpleBlock :: TestBlock Char Text
+simpleBlock = MatchBlock anyToken (pure "default")
+  [ MatchCase (Just (Label "match x")) (== 'x') (anyToken $> "found x - consuming")
+  , MatchCase (Just (Label "match x dupe")) (== 'x') (pure "dupe x - leaving")
+  , MatchCase (Just (Label "match y")) (== 'y') (pure "found y - leaving")
   ]
 
 test_look_ahead_match :: [TestTree]
 test_look_ahead_match =
   let parser = lookAheadMatch simpleBlock
       cases =
-        [ ParserCase "empty" parser "" (sucRes (OffsetStream 0 "") "n misses: 3")
-        , ParserCase "non-match" parser "wz" (sucRes (OffsetStream 0 "wz") "n misses: 3")
+        [ ParserCase "empty" parser "" (errRes [anyTokErr (OffsetStream 0 "")])
+        , ParserCase "non-match" parser "wz" (sucRes (OffsetStream 0 "wz") "default")
         , ParserCase "match x" parser "xz" (sucRes (OffsetStream 1 "z") "found x - consuming")
         , ParserCase "match y" parser "yz" (sucRes (OffsetStream 0 "yz") "found y - leaving")
         ]
@@ -568,8 +570,8 @@ test_look_ahead_examine =
   let xpositions = [MatchPos 0 (Just (Label "match x")), MatchPos 1 (Just (Label "match x dupe"))]
       ypositions = [MatchPos 2 (Just (Label "match y"))]
       cases =
-        [ ExamineCase "empty" simpleBlock "" (LookAheadTestDefault (Just (Label "default")))
-        , ExamineCase "non-match" simpleBlock "wz" (LookAheadTestDefault (Just (Label "default")))
+        [ ExamineCase "empty" simpleBlock "" LookAheadTestEmpty
+        , ExamineCase "non-match" simpleBlock "wz" LookAheadTestDefault
         , ExamineCase "match x" simpleBlock "xz" (LookAheadTestMatches (NESeq.unsafeFromSeq (Seq.fromList xpositions)))
         , ExamineCase "match y" simpleBlock "yz" (LookAheadTestMatches (NESeq.unsafeFromSeq (Seq.fromList ypositions)))
         ]
@@ -620,13 +622,43 @@ test_json =
         , ("obj0", "{}", Just (objVal []))
         , ("obj1", "{\"x\": true}", Just (objVal [("x", trueVal)]))
         , ("obj2", "{\"x\": true, \"y\": false}", Just (objVal [("x", trueVal), ("y", falseVal)]))
-        , ("num0", "0", Just (numVal (read "0")))
-        , ("num1", "123", Just (numVal (read "123")))
-        , ("num2", "123.45", Just (numVal (read "123.45")))
+        , ("num0", "0", Just (numVal 0))
+        , ("num1", "123", Just (numVal 123))
+        , ("num2", "123.45", Just (numVal 123.45))
         , ("num3", "1e100", Just (numVal (read "1e100")))
-        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", Just (objVal [("x", numVal (read "1e100")), ("y", numVal (read "123.45"))]))
+        , ("num4", "{\"x\": 1e100, \"y\": 123.45}", Just (objVal [("x", numVal (read "1e100")), ("y", numVal 123.45)]))
         ]
   in testJsonTrees cases
+
+-- type SexpResult = Maybe Sexp
+type SexpResult = Either String Sexp
+
+testSexpCase :: TestName -> Text -> SexpResult -> TestTree
+testSexpCase name str expected = testCase ("sexp " <> name) $ do
+  let actual = parseSexp str
+  actual @?= expected
+
+testSexpTrees :: [(TestName, Text, SexpResult)] -> [TestTree]
+testSexpTrees = fmap (\(n, s, e) -> testSexpCase n s e)
+
+parseSexp :: Text -> SexpResult
+parseSexp str =
+  let p = sexpParser <* matchEnd
+  in case runParser p str of
+    Just (ParseResultSuccess (ParseSuccess _ a)) -> pure a
+    x -> Left (show x)
+
+test_sexp :: [TestTree]
+test_sexp =
+  let cases =
+        -- [ ("empty", "", Nothing)
+        [ ("empty list", "()", pure (Sexp (SexpList Empty)))
+        , ("num", "1", pure (Sexp (SexpAtom (AtomInt 1))))
+        , ("ident", "xyz", pure (Sexp (SexpAtom (AtomIdent "xyz"))))
+        , ("string", "\"xyz\"", pure (Sexp (SexpAtom (AtomString "xyz"))))
+        , ("float", "3.14", pure (Sexp (SexpAtom (AtomFloat 3.14))))
+        ]
+  in testSexpTrees cases
 
 main :: IO ()
 main = $(defaultMainGenerator)
