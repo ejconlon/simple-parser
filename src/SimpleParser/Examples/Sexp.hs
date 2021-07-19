@@ -11,16 +11,18 @@ module SimpleParser.Examples.Sexp
   , recSexpParser
   ) where
 
+import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
 import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Void (Void)
 import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     TextLabel, TextualStream, anyToken, betweenParser, commitParser, escapedStringParser, lexemeParser,
-                     lookAheadMatch, matchToken, onEmptyParser, orParser, packChunk, satisfyToken, scientificParser,
-                     sepByParser, signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
+                     TextLabel, TextualStream, betweenParser, commitParser, escapedStringParser, lexemeParser,
+                     lookAheadMatch, matchToken, onEmptyParser, orParser, packChunk, popChunk, satisfyToken,
+                     scientificParser, sepByParser, signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
@@ -99,20 +101,41 @@ floatP :: SexpParserC s => SexpParserM s Scientific
 floatP = signedParser (pure ()) scientificParser
 
 -- Since intP is a subset of floatP, we ignore errors there and let floatP report them.
-numP :: SexpParserC s => SexpParserM s Atom
-numP = do
+numAtomP :: SexpParserC s => SexpParserM s Atom
+numAtomP = do
   s <- floatP
+  -- TODO put Integer back and keep exponentiated stuff here
   case toBoundedInteger s of
     Just i -> pure (AtomInt i)
     Nothing -> pure (AtomFloat s)
 
+chunk1 :: SexpParserC s => SexpParserM s Text
+chunk1 = do
+  mc <- popChunk 2
+  case mc of
+    Just c | not (chunkEmpty c) -> pure (packChunk c)
+    _ -> empty
+
+unaryIdentPred :: Char -> Text -> Bool
+unaryIdentPred u t0 =
+  case T.uncons t0 of
+    Just (c0, t1) | u == c0 ->
+      case T.uncons t1 of
+        Just (c1, _) -> not (isDigit c1)
+        Nothing -> True
+    _ -> False
+
+identAtomP :: SexpParserC s => SexpParserM s Atom
+identAtomP = fmap AtomIdent identifierP
+
 atomP :: SexpParserC s => SexpParserM s Atom
 atomP = lexP (lookAheadMatch block) where
-  -- TODO allow `+` and `-` identifiers - need to take a 2-chunk for that
-  block = MatchBlock anyToken (fail "failed to parse sexp atom")
-    [ MatchCase Nothing (== '"') (fmap AtomString stringP)
-    , MatchCase Nothing signedNumStartPred numP
-    , MatchCase Nothing identStartPred (fmap AtomIdent identifierP)
+  block = MatchBlock chunk1 (fail "failed to parse sexp atom")
+    [ MatchCase Nothing ((== '"') . T.head) (fmap AtomString stringP)
+    , MatchCase Nothing (unaryIdentPred '+') identAtomP
+    , MatchCase Nothing (unaryIdentPred '-') identAtomP
+    , MatchCase Nothing (signedNumStartPred . T.head) numAtomP
+    , MatchCase Nothing (identStartPred . T.head) identAtomP
     ]
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)

@@ -669,9 +669,8 @@ test_sexp =
         , ("float", "3.14", Just floatSexp)
         , ("float pos", "+3.14", Just floatSexp)
         , ("float neg", "-3.14", Just (Sexp (SexpAtom (AtomFloat -3.14))))
-        -- TODO(ejconlon) support these
-        -- , ("plus", "+", Just (Sexp (SexpAtom (AtomIdent "+"))))
-        -- , ("minus", "-", Just (Sexp (SexpAtom (AtomIdent "-"))))
+        , ("plus", "+", Just (Sexp (SexpAtom (AtomIdent "+"))))
+        , ("minus", "-", Just (Sexp (SexpAtom (AtomIdent "-"))))
         , ("multi list", "(1 abc \"xyz\" 3.14)", Just (Sexp (SexpList (Seq.fromList [numSexp, identSexp, stringSexp, floatSexp]))))
         , ("pair nested list", "((1 1) (1 1))", Just (Sexp (SexpList (Seq.fromList [pairList, pairList]))))
         ]
