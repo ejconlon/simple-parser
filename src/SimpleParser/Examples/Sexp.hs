@@ -14,21 +14,21 @@ module SimpleParser.Examples.Sexp
 import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
-import Data.Scientific (Scientific, toBoundedInteger)
+import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
 import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     TextLabel, TextualStream, betweenParser, commitParser, escapedStringParser, lexemeParser,
-                     lookAheadMatch, matchToken, onEmptyParser, orParser, packChunk, popChunk, satisfyToken,
-                     scientificParser, sepByParser, signedNumStartPred, signedParser, spaceParser, takeTokensWhile)
+                     TextLabel, TextualStream, applySign, betweenParser, commitParser, escapedStringParser,
+                     lexemeParser, lookAheadMatch, matchToken, numParser, onEmptyParser, orParser, packChunk, popChunk,
+                     satisfyToken, sepByParser, signParser, signedNumStartPred, spaceParser, takeTokensWhile)
 
 data Atom =
     AtomIdent !Text
   | AtomString !Text
-  | AtomInt !Int
-  | AtomFloat !Scientific
+  | AtomInt !Integer
+  | AtomSci !Scientific
   deriving (Eq, Show)
 
 data SexpF a =
@@ -97,17 +97,13 @@ openParenP = lexP (void (matchToken '('))
 closeParenP :: SexpParserC s => SexpParserM s ()
 closeParenP = lexP (void (matchToken ')'))
 
-floatP :: SexpParserC s => SexpParserM s Scientific
-floatP = signedParser (pure ()) scientificParser
-
--- Since intP is a subset of floatP, we ignore errors there and let floatP report them.
 numAtomP :: SexpParserC s => SexpParserM s Atom
 numAtomP = do
-  s <- floatP
-  -- TODO put Integer back and keep exponentiated stuff here
-  case toBoundedInteger s of
-    Just i -> pure (AtomInt i)
-    Nothing -> pure (AtomFloat s)
+  ms <- signParser
+  n <- numParser
+  case n of
+    Left i -> pure (AtomInt (applySign ms i))
+    Right s -> pure (AtomSci (applySign ms s))
 
 chunk1 :: SexpParserC s => SexpParserM s Text
 chunk1 = do

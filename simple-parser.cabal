@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5667cd8220ed799bc62559e40dc318c96b3669598b4236c993e0bd42592ca8a6
+-- hash: 7341b05daadfbc05dcc6e23a6a38993f95e78a160b7942b60b7d39fc93331b6e
 
 name:           simple-parser
 version:        0.7.0
@@ -60,6 +60,7 @@ library
       KindSignatures
       MultiParamTypeClasses
       StandaloneDeriving
+      TupleSections
       TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds
   build-depends:
@@ -96,6 +97,7 @@ test-suite simple-parser-test
       KindSignatures
       MultiParamTypeClasses
       StandaloneDeriving
+      TupleSections
       TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
   build-depends:

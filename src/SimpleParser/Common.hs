@@ -15,6 +15,10 @@ module SimpleParser.Common
   , decimalParser
   , signedNumStartPred
   , scientificParser
+  , numParser
+  , Sign (..)
+  , signParser
+  , applySign
   , signedParser
   , escapedStringParser
   , spanParser
@@ -24,11 +28,13 @@ module SimpleParser.Common
 import Control.Monad (void)
 import Control.Monad.State (get, gets)
 import Data.Char (digitToInt, isDigit, isSpace)
+import Data.Functor (($>))
 import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, takeTokensWhile1)
+import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, peekToken, popToken,
+                           takeTokensWhile1)
 import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser, orParser)
 import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
@@ -148,6 +154,38 @@ scientificParser = do
   e <- defaultParser e' (exponentParser e')
   pure (Sci.scientific c e)
 
+-- | Parses a number as a literal integer or a 'Scientific' number.
+-- Though 'Scientific' can represent integers, this allows you to distinugish integer literals from scientific literals
+-- since that information is lost after parsing.
+numParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m) => ParserT l s e m (Either Integer Scientific)
+numParser = do
+  c' <- decimalParser
+  (SP c e', b1) <- defaultParser (SP c' 0, False) (fmap (,True) (dotDecimalParser c'))
+  (e, b2) <- defaultParser (e', False) (fmap (,True) (exponentParser e'))
+  -- If there is no decimal or exponent, return this as an integer
+  -- Otherwise return as scientific, which may be float or exponentiated integer
+  if not b1 && not b2
+    then pure (Left c')
+    else pure (Right (Sci.scientific c e))
+
+data Sign = SignPos | SignNeg deriving (Eq, Show)
+
+-- | Consumes an optional + or - representing the sign of a number.
+signParser :: (Stream s, Token s ~ Char, Monad m) => ParserT l s e m (Maybe Sign)
+signParser = do
+  mc <- peekToken
+  case mc of
+    Just '+' -> popToken $> Just SignPos
+    Just '-' -> popToken $> Just SignNeg
+    _ -> pure Nothing
+
+-- | Optionally negate the number according to the sign (treating 'Nothing' as positive sign).
+applySign :: Num a => Maybe Sign -> a -> a
+applySign ms n =
+  case ms of
+    Just SignNeg -> negate n
+    _ -> n
+
 -- | Parses an optional sign character followed by a number and yields a correctly-signed
 -- number (equivalend to Megaparsec's 'signed').
 signedParser :: (Stream s, Token s ~ Char, Monad m, Num a) =>
@@ -157,8 +195,10 @@ signedParser :: (Stream s, Token s ~ Char, Monad m, Num a) =>
   ParserT l s e m a ->
   -- | Parser for signed numbers
   ParserT l s e m a
-signedParser spc p = defaultParser id (lexemeParser spc sign) <*> p where
-  sign = orParser (id <$ matchToken '+') (negate <$ matchToken '-')
+signedParser spc p = do
+  ms <- signParser
+  spc
+  fmap (applySign ms) p
 
 data Pair = Pair ![Char] !Bool
 

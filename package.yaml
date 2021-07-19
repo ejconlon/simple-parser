@@ -39,6 +39,7 @@ default-extensions:
 - KindSignatures
 - MultiParamTypeClasses
 - StandaloneDeriving
+- TupleSections
 - TypeFamilies
 
 ghc-options:
