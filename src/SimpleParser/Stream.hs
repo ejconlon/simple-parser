@@ -18,12 +18,17 @@ module SimpleParser.Stream
   ) where
 
 import Data.Bifunctor (first, second)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BSL
 import Data.Kind (Type)
 import Data.List (foldl')
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import Data.Word (Word8)
 import SimpleParser.Chunked (Chunked (..), TextualChunked (..))
 
 -- | 'Stream' lets us peel off tokens and chunks for parsing with explicit state passing.
@@ -83,6 +88,47 @@ instance Stream Text where
     | T.null s = Nothing
     | otherwise = Just (T.splitAt n s)
   streamTakeWhile = T.span
+
+  -- TODO(ejconlon) Specialize drops
+
+instance Stream TL.Text where
+  type instance Chunk TL.Text = TL.Text
+  type instance Token TL.Text = Char
+
+  streamTake1 = TL.uncons
+  streamTakeN n s
+    | n <= 0 = Just (TL.empty, s)
+    | TL.null s = Nothing
+    | otherwise = Just (TL.splitAt (fromIntegral n) s)
+  streamTakeWhile = TL.span
+
+  -- TODO(ejconlon) Specialize drops
+
+instance Stream ByteString where
+  type instance Chunk ByteString = ByteString
+  type instance Token ByteString = Word8
+
+  streamTake1 = BS.uncons
+  streamTakeN n s
+    | n <= 0 = Just (BS.empty, s)
+    | BS.null s = Nothing
+    | otherwise = Just (BS.splitAt n s)
+  streamTakeWhile = BS.span
+
+  -- TODO(ejconlon) Specialize drops
+
+instance Stream BSL.ByteString where
+  type instance Chunk BSL.ByteString = BSL.ByteString
+  type instance Token BSL.ByteString = Word8
+
+  streamTake1 = BSL.uncons
+  streamTakeN n s
+    | n <= 0 = Just (BSL.empty, s)
+    | BSL.null s = Nothing
+    | otherwise = Just (BSL.splitAt (fromIntegral n) s)
+  streamTakeWhile = BSL.span
+
+  -- TODO(ejconlon) Specialize drops
 
 -- | 'PosStream' adds position tracking to a 'Stream'.
 class Stream s => PosStream s where

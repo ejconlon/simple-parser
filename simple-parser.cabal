@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7341b05daadfbc05dcc6e23a6a38993f95e78a160b7942b60b7d39fc93331b6e
+-- hash: f2236fd481ed5014f290a522ef1c9a4df6f488ed8ad58f0ef69aa30acef790d5
 
 name:           simple-parser
-version:        0.7.0
+version:        0.8.0
 synopsis:       Simple parser combinators
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
 category:       Parsing
@@ -29,6 +29,7 @@ source-repository head
 library
   exposed-modules:
       SimpleParser
+      SimpleParser.CharString
       SimpleParser.Chunked
       SimpleParser.Common
       SimpleParser.Errata
@@ -65,6 +66,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds
   build-depends:
       base >=4.12 && <5
+    , bytestring ==0.10.*
     , containers ==0.6.*
     , errata ==0.3.*
     , list-t ==1.0.*
@@ -102,6 +104,7 @@ test-suite simple-parser-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wpartial-fields -Wredundant-constraints -fno-warn-unused-top-binds -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.12 && <5
+    , bytestring ==0.10.*
     , containers ==0.6.*
     , errata ==0.3.*
     , list-t ==1.0.*

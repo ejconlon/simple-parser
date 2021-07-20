@@ -4,7 +4,8 @@
 -- "SimpleParser.Parser" for the core transformer, "SimpleParser.Stream" for the source abstraction,
 -- or "SimpleParser.Input" for useful combinators.
 module SimpleParser
-  ( module SimpleParser.Chunked
+  ( module SimpleParser.CharString
+  , module SimpleParser.Chunked
   , module SimpleParser.Common
   , module SimpleParser.Explain
   , module SimpleParser.Input
@@ -16,6 +17,7 @@ module SimpleParser
   , module SimpleParser.Stream
   ) where
 
+import SimpleParser.CharString
 import SimpleParser.Chunked
 import SimpleParser.Common
 import SimpleParser.Explain

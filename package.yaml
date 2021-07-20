@@ -1,5 +1,5 @@
 name:                simple-parser
-version:             0.7.0
+version:             0.8.0
 github:              "ejconlon/simple-parser"
 license:             BSD3
 author:              "Eric Conlon"
@@ -15,6 +15,7 @@ description: Please see the README on GitHub at <https://github.com/ejconlon/sim
 
 dependencies:
 - base >= 4.12 && < 5
+- bytestring >= 0.10 && < 0.11
 - containers >= 0.6 && < 0.7
 - errata >= 0.3 && < 0.4
 - list-t >= 1.0 && < 1.1
