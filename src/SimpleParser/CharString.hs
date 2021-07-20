@@ -45,9 +45,7 @@ instance Chunked CharString Char where
 instance TextualChunked CharString where
   buildChunk = TB.asciiByteString . unCharString
   packChunk = TE.decodeLatin1 . unCharString
-  packChunkLazy = TLE.decodeLatin1 . BSLC.fromStrict . unCharString
   unpackChunk = CharString . TE.encodeUtf8
-  unpackChunkLazy = CharString . BSLC.toStrict . TLE.encodeUtf8
 
 instance Stream CharString where
   type Chunk CharString = CharString
@@ -72,9 +70,7 @@ instance Chunked LazyCharString Char where
 instance TextualChunked LazyCharString where
   buildChunk = TB.asciiByteString . BSLC.toStrict . unLazyCharString
   packChunk = TL.toStrict . TLE.decodeLatin1 . unLazyCharString
-  packChunkLazy = TLE.decodeLatin1 . unLazyCharString
   unpackChunk = LazyCharString . TLE.encodeUtf8 . TL.fromStrict
-  unpackChunkLazy = LazyCharString . TLE.encodeUtf8
 
 instance Stream LazyCharString where
   type Chunk LazyCharString = LazyCharString

@@ -13,7 +13,6 @@ import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Builder as TLB
 import Data.Word (Word8)
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
@@ -38,15 +37,10 @@ class Monoid chunk => Chunked chunk token | chunk -> token where
 class Chunked chunk Char => TextualChunked chunk where
   buildChunk :: chunk -> Builder
   buildChunk = TB.text . packChunk
-  buildChunkLazy :: chunk -> TLB.Builder
-  buildChunkLazy = TLB.fromLazyText . packChunkLazy
   packChunk :: chunk -> Text
   packChunk = TB.run . buildChunk
-  packChunkLazy :: chunk -> TL.Text
-  packChunkLazy = TLB.toLazyText . buildChunkLazy
   unpackChunk :: Text -> chunk
-  unpackChunkLazy :: TL.Text -> chunk
-  {-# MINIMAL (buildChunk | packChunk), (buildChunkLazy | packChunkLazy), unpackChunk, unpackChunkLazy #-}
+  {-# MINIMAL (buildChunk | packChunk), unpackChunk #-}
 
 instance Chunked [a] a where
   consChunk = (:)
@@ -59,11 +53,8 @@ instance Chunked [a] a where
 
 instance (a ~ Char) => TextualChunked [a] where
   buildChunk = TB.string
-  buildChunkLazy = TLB.fromString
   packChunk = T.pack
-  packChunkLazy = TL.pack
   unpackChunk = T.unpack
-  unpackChunkLazy = TL.unpack
 
 instance Chunked (Seq a) a where
   consChunk = (:<|)
@@ -80,11 +71,8 @@ instance Chunked (Seq a) a where
 
 instance (a ~ Char) => TextualChunked (Seq a) where
   buildChunk = TB.string . toList
-  buildChunkLazy = TLB.fromString . toList
   packChunk = T.pack . toList
-  packChunkLazy = TL.pack . toList
   unpackChunk = Seq.fromList . T.unpack
-  unpackChunkLazy = Seq.fromList . TL.unpack
 
 instance Chunked Text Char where
   consChunk = T.cons
@@ -97,11 +85,8 @@ instance Chunked Text Char where
 
 instance TextualChunked Text where
   buildChunk = TB.text
-  buildChunkLazy = TLB.fromText
   packChunk = id
-  packChunkLazy = TL.fromStrict
   unpackChunk = id
-  unpackChunkLazy = TL.toStrict
 
 instance Chunked TL.Text Char where
   consChunk = TL.cons
@@ -114,11 +99,8 @@ instance Chunked TL.Text Char where
 
 instance TextualChunked TL.Text where
   buildChunk = TB.text . TL.toStrict
-  buildChunkLazy = TLB.fromLazyText
   packChunk = TL.toStrict
-  packChunkLazy = id
   unpackChunk = TL.fromStrict
-  unpackChunkLazy = id
 
 instance Chunked ByteString Word8 where
   consChunk = BS.cons
