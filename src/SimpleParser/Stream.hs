@@ -2,8 +2,6 @@
 -- See <https://hackage.haskell.org/package/megaparsec-9.0.1/docs/Text-Megaparsec-Stream.html Text.Megaparsec.Stream>.
 module SimpleParser.Stream
   ( Stream (..)
-  , defaultStreamDropN
-  , defaultStreamDropWhile
   , TextualStream
   , PosStream (..)
   , Offset (..)
@@ -37,20 +35,29 @@ class Chunked (Chunk s) (Token s) => Stream s where
   type family Token s :: Type
 
   streamTake1 :: s -> Maybe (Token s, s)
+
   streamTakeN :: Int -> s -> Maybe (Chunk s, s)
+  streamTakeN = go mempty where
+    ret acc s = Just (revTokensToChunk acc, s)
+    go !acc !n !s
+      | n <= 0 = ret acc s
+      | otherwise =
+          case streamTake1 s of
+            Nothing -> if null acc then Nothing else ret acc s
+            Just (t, s') -> go (t:acc) (n - 1) s'
+
   streamTakeWhile :: (Token s -> Bool) -> s -> (Chunk s, s)
+  streamTakeWhile p = go mempty where
+    go !acc !s =
+      case streamTake1 s of
+        Just (t, s') | p t -> go (t:acc) s'
+        _ -> (revTokensToChunk acc, s)
 
   streamDropN :: Int -> s -> Maybe (Int, s)
-  streamDropN = defaultStreamDropN
+  streamDropN n = fmap (first chunkLength) . streamTakeN n
 
   streamDropWhile :: (Token s -> Bool) -> s -> (Int, s)
-  streamDropWhile = defaultStreamDropWhile
-
-defaultStreamDropN :: Stream s => Int -> s -> Maybe (Int, s)
-defaultStreamDropN n = fmap (first chunkLength) . streamTakeN n
-
-defaultStreamDropWhile :: Stream s => (Token s -> Bool) -> s -> (Int, s)
-defaultStreamDropWhile pcate = first chunkLength . streamTakeWhile pcate
+  streamDropWhile pcate = first chunkLength . streamTakeWhile pcate
 
 type TextualStream s = (Stream s, Token s ~ Char, TextualChunked (Chunk s))
 
