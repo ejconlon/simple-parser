@@ -22,7 +22,7 @@ import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (CompoundTextLabel (..), TextLabel (..))
 import SimpleParser.Result (CompoundError (..), ParseError (..), RawError (..), StreamError (..),
                             parseErrorEnclosingLabels, parseErrorNarrowestSpan)
-import SimpleParser.Stream (LinePos (..), PosStream (..), Span (..), Stream (..), TextualStream)
+import SimpleParser.Stream (HasLinePos (..), PosStream (..), Span (..), Stream (..), TextualStream)
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
 
@@ -125,9 +125,17 @@ explainParseError pe =
       errExp = explainError (peError pe)
   in ParseErrorExplanation sp context mayDetails errExp
 
-buildSpan :: Span LinePos -> Builder
-buildSpan (Span (LinePos _ sl sc) (LinePos _ el ec)) =
-  TB.decimal (succ sl) <> ":" <> TB.decimal (succ sc) <> "-" <> TB.decimal (succ el) <> ":" <> TB.decimal (succ ec)
+buildSpan :: HasLinePos p => Span p -> Builder
+buildSpan (Span p1 p2) =
+  let l1 = viewLine p1
+      c1 = viewCol p1
+      l2 = viewLine p2
+      c2 = viewCol p2
+      r1 = TB.decimal (succ l1) <> ":" <> TB.decimal (succ c1)
+      r2 = TB.decimal (succ l2) <> ":" <> TB.decimal (succ c2)
+  in if l1 == l2 && c1 == c2
+    then r1
+    else r1 <> "-" <> r2
 
 buildErrorExplanation :: Maybe Builder -> ErrorExplanation -> [Builder]
 buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual) = join
@@ -137,7 +145,7 @@ buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual)
   , maybe [] (\ac -> ["[Actual  ] " <> TB.text ac]) mayActual
   ]
 
-buildParseErrorExplanation :: ParseErrorExplanation LinePos -> Builder
+buildParseErrorExplanation :: HasLinePos p => ParseErrorExplanation p -> Builder
 buildParseErrorExplanation (ParseErrorExplanation sp context mayDetails errExp) =
   let hd = join
         [ ["[Pos     ] " <> buildSpan sp]
@@ -146,5 +154,5 @@ buildParseErrorExplanation (ParseErrorExplanation sp context mayDetails errExp) 
       tl = buildErrorExplanation (fmap TB.text mayDetails) errExp
   in TB.intercalate "\n" (hd ++ tl)
 
-buildAllParseErrorExplanations :: Foldable f => f (ParseErrorExplanation LinePos) -> Builder
+buildAllParseErrorExplanations :: (HasLinePos p, Foldable f) => f (ParseErrorExplanation p) -> Builder
 buildAllParseErrorExplanations = TB.intercalate "\n\n" . fmap buildParseErrorExplanation . toList

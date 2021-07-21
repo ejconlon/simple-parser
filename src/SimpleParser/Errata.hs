@@ -13,13 +13,17 @@ import qualified Data.Text as T
 import Errata (Block, Style, blockMerged')
 import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), explainParseError)
 import SimpleParser.Result (ParseError, ParseResult (..))
-import SimpleParser.Stream (Col (..), Line (..), LinePos (..), Pos, Span (..))
+import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..))
 
-type LinePosExplainable l s e = (Explainable l s e, Pos s ~ LinePos)
+type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s))
 
-errataExplanation :: Style -> FilePath -> ParseErrorExplanation LinePos -> Block
+errataExplanation :: HasLinePos p => Style -> FilePath -> ParseErrorExplanation p -> Block
 errataExplanation style fp (ParseErrorExplanation sp context mayDetails  (ErrorExplanation reason mayExpected mayActual)) =
-  let Span (LinePos _ (Line startLine) (Col startCol)) (LinePos _ (Line endLine) (Col endCol)) = sp
+  let Span startPos endPos = sp
+      startLine = unLine (viewLine startPos)
+      startCol = unCol (viewCol startPos)
+      endLine = unLine (viewLine endPos)
+      endCol = unCol (viewCol endPos)
       mayLabel = Just reason
       mayHeader =
        case context of

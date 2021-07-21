@@ -13,6 +13,7 @@ module SimpleParser.Stream
   , LinePosStream (..)
   , newLinePosStream
   , Span (..)
+  , HasLinePos (..)
   ) where
 
 import Data.Bifunctor (first, second)
@@ -231,3 +232,12 @@ data Span p = Span
   { spanStart :: !p
   , spanEnd :: !p
   } deriving (Eq, Show, Ord)
+
+-- | Allows projections into (Line, Col) for more exotic stream positions.
+class HasLinePos p where
+  viewLine :: p -> Line
+  viewCol :: p -> Col
+
+instance HasLinePos LinePos where
+  viewLine = lpLine
+  viewCol = lpCol

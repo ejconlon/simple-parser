@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ce19476ac6cda5f690dbd36c08a1e3ea7f6a18139c3cda8ae878b3d0f18aea6a
+-- hash: 30149b888c19d3f8c0f4ec90adef691a37befb566bb620eb5fc386bcc57224dd
 
 name:           simple-parser
-version:        0.8.1
+version:        0.8.2
 synopsis:       Simple parser combinators
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
 category:       Parsing
