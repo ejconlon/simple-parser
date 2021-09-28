@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 30149b888c19d3f8c0f4ec90adef691a37befb566bb620eb5fc386bcc57224dd
+-- hash: 4248dc5b15918409b82084dbe5e626640b8c7a2f7b547f0f840500bfaf955af7
 
 name:           simple-parser
-version:        0.8.2
+version:        0.8.3
 synopsis:       Simple parser combinators
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
 category:       Parsing
@@ -15,7 +15,7 @@ homepage:       https://github.com/ejconlon/simple-parser#readme
 bug-reports:    https://github.com/ejconlon/simple-parser/issues
 author:         Eric Conlon
 maintainer:     ejconlon@gmail.com
-copyright:      (c) 2020 Eric Conlon
+copyright:      (c) 2021 Eric Conlon
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple

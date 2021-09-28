@@ -1,10 +1,10 @@
 name:                simple-parser
-version:             0.8.2
+version:             0.8.3
 github:              "ejconlon/simple-parser"
 license:             BSD3
 author:              "Eric Conlon"
 maintainer:          "ejconlon@gmail.com"
-copyright:           "(c) 2020 Eric Conlon"
+copyright:           "(c) 2021 Eric Conlon"
 category:            Parsing
 synopsis:            Simple parser combinators
 
