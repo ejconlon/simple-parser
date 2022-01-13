@@ -13,7 +13,7 @@ packages:
     hackage: errata-0.3.0.0
 snapshots:
 - completed:
-    size: 586041
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/11.yaml
-    sha256: ae30d25a4691c6bb32b5766c617dff24270b2b3576ebd6047d754418e9256389
-  original: lts-18.11
+    size: 586110
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/21.yaml
+    sha256: ce4fb8d44f3c6c6032060a02e0ebb1bd29937c9a70101c1517b92a87d9515160
+  original: lts-18.21
