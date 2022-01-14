@@ -1,5 +1,5 @@
 name:                simple-parser
-version:             0.8.3
+version:             0.8.4
 github:              "ejconlon/simple-parser"
 license:             BSD3
 author:              "Eric Conlon"
@@ -18,7 +18,6 @@ dependencies:
 - bytestring >= 0.10 && < 0.11
 - containers >= 0.6 && < 0.7
 - errata >= 0.3 && < 0.4
-- list-t >= 1.0 && < 1.1
 - mmorph >= 1.1 && < 1.2
 - mtl >= 2.2 && < 2.3
 - nonempty-containers >= 0.3 && < 0.4
