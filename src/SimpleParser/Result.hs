@@ -13,15 +13,20 @@ module SimpleParser.Result
   , unmarkParseError
   , parseErrorEnclosingLabels
   , parseErrorNarrowestSpan
+  , ParseErrorBundle (..)
+  , listParseErrors
+  , matchSoleParseError
   , ParseSuccess (..)
   , ParseResult (..)
-  , matchSoleParseError
   ) where
 
+import Control.Exception (Exception)
+import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Sequence.NonEmpty (NESeq (..))
 import Data.Text (Text)
+import Data.Typeable (Typeable)
 import SimpleParser.Stack (Stack (..), bottomStack, bottomUpStack, emptyStack, pushStack, topStack)
 import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
@@ -74,6 +79,13 @@ data ParseError l s e = ParseError
   , peError :: !(CompoundError s e)
   }
 
+deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
+deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseError l s e)
+
+instance (
+  Typeable l, Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable e,
+  Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Exception (ParseError l s e)
+
 -- | Returns the resumption point of the 'ParseError'.
 -- If it has been marked, we use that, otherwise we assume it starts at the exact error point.
 parseErrorResume :: ParseError l s e -> s
@@ -105,27 +117,37 @@ parseErrorEnclosingLabels pe =
     Empty -> Empty
     _ :<| s -> s >>= \(Mark ml _) -> maybe Seq.empty Seq.singleton ml
 
-deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
-deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseError l s e)
-
 data ParseSuccess s a = ParseSuccess
   { psEndState :: !s
   , psValue :: !a
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
+newtype ParseErrorBundle l s e = ParseErrorBundle { unParseErrorBundle :: NESeq (ParseError l s e) }
+
+deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseErrorBundle l s e)
+deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseErrorBundle l s e)
+
+instance (
+  Typeable l, Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable e,
+  Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Exception (ParseErrorBundle l s e)
+
+-- | Lists all errors in the bundle.
+listParseErrors :: ParseErrorBundle l s e -> [ParseError l s e]
+listParseErrors = toList . unParseErrorBundle
+
+-- | If there is only one parse error in the bundle, return it, otherwise return nothing.
+-- Errors can accumulate if you use unrestricted branching (with 'orParser' or 'Alternative' '<|>') or manual 'Parser' constructor application.
+-- However, if you always branch with 'lookAheadMatch' then you will have singleton parse errors, and this will always return 'Just'.
+matchSoleParseError :: ParseErrorBundle l s e -> Maybe (ParseError l s e)
+matchSoleParseError (ParseErrorBundle es) =
+  case es of
+    e :<|| Empty -> Just e
+    _ -> Nothing
+
 data ParseResult l s e a =
-    ParseResultError !(NESeq (ParseError l s e))
+    ParseResultError !(ParseErrorBundle l s e)
   | ParseResultSuccess !(ParseSuccess s a)
   deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseResult l s e a)
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseResult l s e a)
-
--- | If there is one parse error, return it, otherwise return nothing.
--- Errors can accumulate if you use unrestricted branching (with 'orParser' or 'Alternative' '<|>') or manual 'Parser' constructor application.
--- However, if you always branch with 'lookAheadMatch' then you will have singleton parse errors, and this will always return 'Just'.
-matchSoleParseError :: NESeq (ParseError l s e) -> Maybe (ParseError l s e)
-matchSoleParseError es =
-  case es of
-    e :<|| Empty -> Just e
-    _ -> Nothing

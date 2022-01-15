@@ -46,8 +46,8 @@ import qualified Data.Sequence.NonEmpty as NESeq
 import Data.Text (Text)
 import qualified Data.Text as T
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Result (CompoundError (..), Mark (..), ParseError (..), ParseResult (..), ParseSuccess (..),
-                            markParseError, parseErrorResume, unmarkParseError)
+import SimpleParser.Result (CompoundError (..), Mark (..), ParseError (..), ParseErrorBundle (..), ParseResult (..),
+                            ParseSuccess (..), markParseError, parseErrorResume, unmarkParseError)
 import SimpleParser.Stack (emptyStack)
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
@@ -100,15 +100,15 @@ orParser one two = ParserT (\s -> runParserT one s >>= go1 s) where
       Just res1 ->
         case res1 of
           ParseResultSuccess _ -> pure mres1
-          ParseResultError es1 -> runParserT two s >>= go2 (NESeq.toSeq es1)
+          ParseResultError (ParseErrorBundle es1) -> runParserT two s >>= go2 (NESeq.toSeq es1)
 
   go2 es1 mres2 =
     case mres2 of
-      Nothing -> pure (fmap ParseResultError (NESeq.nonEmptySeq es1))
+      Nothing -> pure (fmap (ParseResultError . ParseErrorBundle) (NESeq.nonEmptySeq es1))
       Just res2 ->
         case res2 of
           ParseResultSuccess _ -> pure mres2
-          ParseResultError es2 -> pure (Just (ParseResultError (es1 ><| es2)))
+          ParseResultError (ParseErrorBundle es2) -> pure (Just (ParseResultError (ParseErrorBundle (es1 ><| es2))))
 
 -- | Yields the LONGEST string of 0 or more successes of the given parser.
 -- Failures will be silenced.
@@ -166,7 +166,7 @@ catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >
             ParseResultSuccess _ ->
               -- Nothing to catch, yield existing success
               pure mres
-            ParseResultError es ->
+            ParseResultError (ParseErrorBundle es) ->
               -- Find first custom error to handle
               goSplit s0 Empty (NESeq.toSeq es)
 
@@ -174,7 +174,7 @@ catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >
       case seqPartition extractCustomError afterEs of
         Nothing ->
           -- No next custom error, finally yield all other errors
-          pure (maybe empty (pure . ParseResultError) (NESeq.nonEmptySeq (beforeEs <> afterEs)))
+          pure (maybe empty (pure . ParseResultError . ParseErrorBundle) (NESeq.nonEmptySeq (beforeEs <> afterEs)))
         Just sep ->
           -- Found custom error - handle it
           goHandle s0 beforeEs sep
@@ -195,13 +195,13 @@ catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >
             Just res ->
               case res of
                 ParseResultSuccess _ -> pure mres
-                ParseResultError es ->
+                ParseResultError (ParseErrorBundle es) ->
                   -- Add to list of errors and find next custom error
                   goSplit s0 (beforeEs <> nextBeforeEs <> NESeq.toSeq es) afterEs
 
 -- | Throws a custom error
 throwParser :: Monad m => e -> ParserT l s e m a
-throwParser e = ParserT (\s -> pure (Just (ParseResultError (pure (ParseError emptyStack s (CompoundErrorCustom e))))))
+throwParser e = ParserT (\s -> pure (Just (ParseResultError (ParseErrorBundle (pure (ParseError emptyStack s (CompoundErrorCustom e)))))))
 
 -- | Catches a custom error
 catchParser :: Monad m => ParserT l s e m a -> (e -> ParserT l s e m a) -> ParserT l s e m a
@@ -213,7 +213,7 @@ instance Monad m => MonadError e (ParserT l s e m) where
 
 -- | A simple failing parser
 failParser :: Monad m => Text -> ParserT l s e m a
-failParser msg = ParserT (\s -> pure (Just (ParseResultError (pure (ParseError emptyStack s (CompoundErrorFail msg))))))
+failParser msg = ParserT (\s -> pure (Just (ParseResultError (ParseErrorBundle (pure (ParseError emptyStack s (CompoundErrorFail msg)))))))
 
 instance Monad m => MonadFail (ParserT l s e m) where
   fail = failParser . T.pack
@@ -271,7 +271,7 @@ markParser :: Monad m => Maybe l -> ParserT l s e m a -> ParserT l s e m a
 markParser ml parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
   go s res =
     case res of
-      ParseResultError es -> ParseResultError (fmap (markParseError (Mark ml s)) es)
+      ParseResultError (ParseErrorBundle es) -> ParseResultError (ParseErrorBundle (fmap (markParseError (Mark ml s)) es))
       ParseResultSuccess _ -> res
 
 -- | Like 'markParser' but allows you to mutate state. See 'withToken' and 'withChunk'.
@@ -288,7 +288,7 @@ unmarkParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
 unmarkParser parser = ParserT (fmap (fmap go) . runParserT parser) where
   go res =
     case res of
-      ParseResultError es -> ParseResultError (fmap unmarkParseError es)
+      ParseResultError (ParseErrorBundle es) -> ParseResultError (ParseErrorBundle (fmap unmarkParseError es))
       ParseResultSuccess _ -> res
 
 -- | If the first parser succeeds in the initial state, yield results from the second parser in the initial

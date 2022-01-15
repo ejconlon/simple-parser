@@ -15,6 +15,7 @@ module SimpleParser
   , module SimpleParser.Result
   , module SimpleParser.Stack
   , module SimpleParser.Stream
+  , module SimpleParser.Throw
   ) where
 
 import SimpleParser.CharString
@@ -28,3 +29,4 @@ import SimpleParser.Parser
 import SimpleParser.Result
 import SimpleParser.Stack
 import SimpleParser.Stream
+import SimpleParser.Throw

@@ -16,7 +16,7 @@ import SimpleParser.Errata (errataParseError)
 import SimpleParser.Explain (Explainable, buildAllParseErrorExplanations, explainParseError)
 import SimpleParser.Input (matchEnd)
 import SimpleParser.Parser (Parser, runParser)
-import SimpleParser.Result (ParseResult (..), ParseSuccess (..))
+import SimpleParser.Result (ParseErrorBundle (..), ParseResult (..), ParseSuccess (..))
 import SimpleParser.Stream (LinePosStream, newLinePosStream)
 import qualified Text.Builder as TB
 
@@ -30,7 +30,7 @@ parseInteractiveStyle errStyle parser input =
   case runParser (parser <* matchEnd) (newLinePosStream (T.pack input)) of
     Nothing ->
       putStrLn "No result."
-    Just (ParseResultError es) ->
+    Just (ParseResultError (ParseErrorBundle es)) ->
       case errStyle of
         ErrorStyleErrata ->
           let blocks = fmap (errataParseError fancyStyle "<interactive>") (toList es)

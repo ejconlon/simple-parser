@@ -27,12 +27,13 @@ import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)
-import SimpleParser.Result (CompoundError (..), ParseError (..), ParseResult (..), RawError (..), StreamError (..))
+import SimpleParser.Result (CompoundError (..), ParseError (..), ParseErrorBundle (..), ParseResult (..), RawError (..),
+                            StreamError (..))
 import SimpleParser.Stack (emptyStack)
 import SimpleParser.Stream (Stream (..))
 
 throwStreamError :: Monad m => RawError (Chunk s) (Token s) -> ParserT l s e m a
-throwStreamError re = ParserT (\s -> pure (Just (ParseResultError (pure (ParseError emptyStack s (CompoundErrorStream (StreamError re)))))))
+throwStreamError re = ParserT (\s -> pure (Just (ParseResultError (ParseErrorBundle (pure (ParseError emptyStack s (CompoundErrorStream (StreamError re))))))))
 
 -- | Fetches the next token from the stream and runs the callback.
 withToken :: (Stream s, Monad m) => Maybe l -> (Maybe (Token s) -> ParserT l s e m a) -> ParserT l s e m a

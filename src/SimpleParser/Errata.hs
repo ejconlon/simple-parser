@@ -12,7 +12,7 @@ import Data.Sequence (Seq (..))
 import qualified Data.Text as T
 import Errata (Block, Style, blockMerged')
 import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), explainParseError)
-import SimpleParser.Result (ParseError, ParseResult (..))
+import SimpleParser.Result (ParseError, ParseErrorBundle (ParseErrorBundle), ParseResult (..))
 import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..))
 
 type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s))
@@ -49,5 +49,5 @@ errataParseError style fp pe =
 errataParseResult :: LinePosExplainable l s e => Style -> FilePath -> ParseResult l s e a -> [Block]
 errataParseResult style fp pr =
   case pr of
-    ParseResultError errs -> fmap (errataParseError style fp) (toList errs)
+    ParseResultError (ParseErrorBundle errs) -> fmap (errataParseError style fp) (toList errs)
     ParseResultSuccess _ -> []

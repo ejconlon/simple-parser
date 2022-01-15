@@ -49,7 +49,7 @@ sucRes :: TestState -> a -> Maybe (TestResult a)
 sucRes st = Just . ParseResultSuccess . ParseSuccess st
 
 errRes :: [TestParseError] -> Maybe (TestResult a)
-errRes es = Just (ParseResultError (NESeq.unsafeFromSeq (Seq.fromList es)))
+errRes es = Just (ParseResultError (ParseErrorBundle (NESeq.unsafeFromSeq (Seq.fromList es))))
 
 custErr :: TestState -> Error -> TestParseError
 custErr endSt = ParseError emptyStack endSt . CompoundErrorCustom
