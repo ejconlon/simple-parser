@@ -5,15 +5,15 @@
 
 packages:
 - completed:
-    hackage: errata-0.3.0.0@sha256:3537e4b29a22c0fd9866dce5d7fac2ad16e9ff636b6ecbe819ab21a56366cc8d,2086
+    hackage: errata-0.4.0.0@sha256:6e0d78add9ec128e3c61b70350b0bf4d2a98b48a28ee6dd775779bc97e707af7,2335
     pantry-tree:
-      size: 683
-      sha256: 137a43b8531539661c590dd6fdf322bd00a8303d0df031e313c4aed271dea415
+      size: 809
+      sha256: f42f3625a1ba5c45b884746a30238f4b769cb0f91281db5f0aad59a5f0e59edd
   original:
-    hackage: errata-0.3.0.0
+    hackage: errata-0.4.0.0
 snapshots:
 - completed:
-    size: 586110
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/21.yaml
-    sha256: ce4fb8d44f3c6c6032060a02e0ebb1bd29937c9a70101c1517b92a87d9515160
-  original: lts-18.21
+    size: 587393
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/25.yaml
+    sha256: 1b74fb5e970497b5aefae56703f1bd44aa648bd1a5ef95c1eb8c29775087e2bf
+  original: lts-18.25

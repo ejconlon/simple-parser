@@ -1,4 +1,4 @@
-resolver: lts-18.21
+resolver: lts-18.25
 
 ghc-options:
   "$everything": -haddock
@@ -7,4 +7,4 @@ packages:
 - .
 
 extra-deps:
-- errata-0.3.0.0
+- errata-0.4.0.0

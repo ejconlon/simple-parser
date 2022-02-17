@@ -10,15 +10,15 @@ import Control.Monad (join)
 import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
 import qualified Data.Text as T
-import Errata (Block, Style, blockMerged')
+import Errata (Block, PointerStyle, Style, blockMerged')
 import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), explainParseError)
 import SimpleParser.Result (ParseError, ParseErrorBundle (ParseErrorBundle), ParseResult (..))
 import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..))
 
 type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s))
 
-errataExplanation :: HasLinePos p => Style -> FilePath -> ParseErrorExplanation p -> Block
-errataExplanation style fp (ParseErrorExplanation sp context mayDetails  (ErrorExplanation reason mayExpected mayActual)) =
+errataExplanation :: HasLinePos p => Style -> PointerStyle  -> FilePath -> ParseErrorExplanation p -> Block
+errataExplanation bsty psty fp (ParseErrorExplanation sp context mayDetails  (ErrorExplanation reason mayExpected mayActual)) =
   let Span startPos endPos = sp
       startLine = unLine (viewLine startPos)
       startCol = unCol (viewCol startPos)
@@ -39,15 +39,15 @@ errataExplanation style fp (ParseErrorExplanation sp context mayDetails  (ErrorE
             , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
             , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
             ]
-  in blockMerged' style fp mayHeader start end mayLabel mayBody
+  in blockMerged' bsty psty fp mayHeader start end mayLabel mayBody
 
-errataParseError :: LinePosExplainable l s e => Style -> FilePath -> ParseError l s e -> Block
-errataParseError style fp pe =
+errataParseError :: LinePosExplainable l s e => Style -> PointerStyle -> FilePath -> ParseError l s e -> Block
+errataParseError bsty psty fp pe =
   let pee = explainParseError pe
-  in errataExplanation style fp pee
+  in errataExplanation bsty psty fp pee
 
-errataParseResult :: LinePosExplainable l s e => Style -> FilePath -> ParseResult l s e a -> [Block]
-errataParseResult style fp pr =
+errataParseResult :: LinePosExplainable l s e => Style -> PointerStyle -> FilePath -> ParseResult l s e a -> [Block]
+errataParseResult bsty psty fp pr =
   case pr of
-    ParseResultError (ParseErrorBundle errs) -> fmap (errataParseError style fp) (toList errs)
+    ParseResultError (ParseErrorBundle errs) -> fmap (errataParseError bsty psty fp) (toList errs)
     ParseResultSuccess _ -> []

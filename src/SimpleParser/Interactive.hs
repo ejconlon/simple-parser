@@ -11,7 +11,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy.IO as TLIO
-import Errata (Errata (..), fancyStyle, prettyErrors)
+import Errata (Errata (..), prettyErrors)
+import Errata.Styles (fancyPointer, fancyStyle)
 import SimpleParser.Errata (errataParseError)
 import SimpleParser.Explain (Explainable, buildAllParseErrorExplanations, explainParseError)
 import SimpleParser.Input (matchEnd)
@@ -33,7 +34,7 @@ parseInteractiveStyle errStyle parser input =
     Just (ParseResultError (ParseErrorBundle es)) ->
       case errStyle of
         ErrorStyleErrata ->
-          let blocks = fmap (errataParseError fancyStyle "<interactive>") (toList es)
+          let blocks = fmap (errataParseError fancyStyle fancyPointer "<interactive>") (toList es)
               errata = Errata Nothing blocks Nothing
               pretty = prettyErrors input [errata]
           in TLIO.putStrLn pretty
