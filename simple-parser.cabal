@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 17ade5426cb768da6b82d273d9a2fdf81daa8787de1fdb47e1fcb17286c15b76
+-- hash: 1bd5758fa8bfec7603eb384295bcd20a48ad729df129cd985990998f0508e9f6
 
 name:           simple-parser
 version:        0.10.0
@@ -61,6 +61,7 @@ library
       FunctionalDependencies
       GeneralizedNewtypeDeriving
       KindSignatures
+      LambdaCase
       MultiParamTypeClasses
       StandaloneDeriving
       TupleSections
@@ -99,6 +100,7 @@ test-suite simple-parser-test
       FunctionalDependencies
       GeneralizedNewtypeDeriving
       KindSignatures
+      LambdaCase
       MultiParamTypeClasses
       StandaloneDeriving
       TupleSections

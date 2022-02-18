@@ -6,6 +6,7 @@ module SimpleParser.LookAhead
   , MatchBlock (..)
   , PureMatchBlock
   , lookAheadMatch
+  , consumeMatch
   , MatchPos (..)
   , LookAheadTestResult (..)
   , lookAheadTest
@@ -39,6 +40,16 @@ type PureMatchBlock l s e a b = MatchBlock l s e Identity a b
 -- | Parse with look-ahead for each case and follow the first that matches (or follow the default if none do).
 lookAheadMatch :: Monad m => MatchBlock l s e m a b -> ParserT l s e m b
 lookAheadMatch (MatchBlock sel dc mcs) = lookAheadParser sel >>= go mcs where
+  go [] _ = dc
+  go ((MatchCase mcl mcg mch):mcs') val =
+    if mcg val
+      then markParser mcl mch
+      else go mcs' val
+
+-- | Same as 'lookAheadMatch' but consumes the selector instead of looking ahead.
+-- Cases will not have to re-parse the selected portion.
+consumeMatch :: Monad m => MatchBlock l s e m a b -> ParserT l s e m b
+consumeMatch (MatchBlock sel dc mcs) = sel >>= go mcs where
   go [] _ = dc
   go ((MatchCase mcl mcg mch):mcs') val =
     if mcg val

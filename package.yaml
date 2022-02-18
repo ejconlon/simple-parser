@@ -38,6 +38,7 @@ default-extensions:
 - FunctionalDependencies
 - GeneralizedNewtypeDeriving
 - KindSignatures
+- LambdaCase
 - MultiParamTypeClasses
 - StandaloneDeriving
 - TupleSections
