@@ -4,13 +4,15 @@
 -- | Parses SExp-formatted ASTs
 module SimpleParser.Examples.Ast where
 
+import Control.Monad (void)
+import Data.Char (isSpace)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import SimpleParser (Chunk, EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (MatchCase), Parser,
-                     TextLabel, TextualStream, anyToken, anyWord, consumeMatch, greedyStarParser, lexemeParser,
-                     lookAheadMatch, spaceParser, throwParser)
+                     TextLabel, TextualStream, anyToken, betweenParser, consumeMatch, greedyStarParser, lexemeParser,
+                     lookAheadMatch, matchToken, spaceParser, takeTokensWhile1, throwParser)
 import qualified Text.Builder as TB
 
 data AstLabel =
@@ -18,6 +20,7 @@ data AstLabel =
   | AstLabelCtorList
   | AstLabelCtorHead
   | AstLabelCtorBody !Text
+  | AstLabelCustom !Text
   deriving (Eq, Show)
 
 instance ExplainLabel AstLabel where
@@ -27,6 +30,7 @@ instance ExplainLabel AstLabel where
       AstLabelCtorList -> "constructor list"
       AstLabelCtorHead -> "constructor head"
       AstLabelCtorBody t -> "constructor body (" <> TB.text t <> ")"
+      AstLabelCustom t -> "custom: " <> TB.text t
 
 instance EmbedTextLabel AstLabel where
   embedTextLabel = AstLabelEmbedText
@@ -35,16 +39,16 @@ type AstParserC s = (TextualStream s, Chunk s ~ Text)
 type AstParserM s e a = Parser AstLabel s e a
 
 data CtorRes e a =
-    CtorFail !String
-  | CtorErr !e
-  | CtorVal !a
+    CtorResFail !String
+  | CtorResErr !e
+  | CtorResVal !a
   deriving stock (Eq, Ord, Show)
 
 embedCtorRes :: CtorRes e a -> AstParserM s e a
 embedCtorRes = \case
-  CtorFail msg -> fail msg
-  CtorErr err -> throwParser err
-  CtorVal val -> pure val
+  CtorResFail msg -> fail msg
+  CtorResErr err -> throwParser err
+  CtorResVal val -> pure val
 
 data Ctor s e t where
   Ctor1 :: (a -> CtorRes e t) -> AstParserM s e a -> Ctor s e t
@@ -67,8 +71,17 @@ spaceP = spaceParser
 lexP :: AstParserC s => AstParserM s e a -> AstParserM s e a
 lexP = lexemeParser spaceP
 
-wordP :: AstParserC s => Maybe AstLabel -> AstParserM s e Text
-wordP = lexP . anyWord
+openParenP :: AstParserC s => AstParserM s e ()
+openParenP = lexP (void (matchToken '('))
+
+closeParenP :: AstParserC s => AstParserM s e ()
+closeParenP = lexP (void (matchToken ')'))
+
+nonDelimPred :: Char -> Bool
+nonDelimPred c = c /= '(' && c /= ')' && not (isSpace c)
+
+identAstParser :: AstParserC s => Maybe AstLabel -> AstParserM s e Text
+identAstParser = lexP . flip takeTokensWhile1 nonDelimPred
 
 astParser :: AstParserC s => AstParserM s e t -> (AstParserM s e t -> CtorDefns s e t) -> AstParserM s e t
 astParser mkAtom mkCtors = let p = recAstParser (Defns mkAtom (mkCtors p)) in p
@@ -80,8 +93,8 @@ recAstParser defns = lookAheadMatch block where
     ]
 
 ctorDefnsAstParser :: AstParserC s => CtorDefns s e t -> AstParserM s e t
-ctorDefnsAstParser ctors = consumeMatch block where
-  block = MatchBlock (wordP (Just AstLabelCtorHead)) (fail "Could not match contstructor") cases
+ctorDefnsAstParser ctors = betweenParser openParenP closeParenP (consumeMatch block) where
+  block = MatchBlock (identAstParser (Just AstLabelCtorHead)) (fail "Could not match constructor") cases
   cases = flip fmap (Map.toList ctors) $ \(t, c) ->
     MatchCase (Just (AstLabelCtorBody t)) (== t) (ctorAstParser c)
 

@@ -20,7 +20,6 @@ module SimpleParser.Input
   , dropTokensWhile1
   , matchToken
   , matchChunk
-  , anyWord
   ) where
 
 import Control.Monad.State (gets, state)
@@ -151,8 +150,3 @@ matchChunk k = withChunk Nothing (chunkLength k) $ \mj ->
   case mj of
     Just j | k == j -> pure j
     _ -> throwStreamError (RawErrorMatchChunk k mj)
-
--- | Common enough textual combinator to warrant inclusion here - parse a non-empty chunk of
--- non-whitespace. (UNSAFE)
-anyWord :: (Stream s, Monad m, Token s ~ Char) => Maybe l -> ParserT l s e m (Chunk s)
-anyWord ml = takeTokensWhile1 ml (not . isSpace)
