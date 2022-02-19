@@ -24,7 +24,6 @@ module SimpleParser.Input
 
 import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
-import Data.Char (isSpace)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)

@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Parses SExp-formatted ASTs
+-- | Parses Sexp-formatted ASTs
 module SimpleParser.Examples.Ast
   ( AstLabel (..)
   , AstParserC

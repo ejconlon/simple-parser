@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Parses JSON documents
 module SimpleParser.Examples.Json
   ( Json (..)
   , JsonF (..)

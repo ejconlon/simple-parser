@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Parses simple Sexp-formatted logical propositions
 module SimpleParser.Examples.Prop where
 
 import qualified Data.Map.Strict as Map

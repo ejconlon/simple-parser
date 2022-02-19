@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Parses S-expressions
 module SimpleParser.Examples.Sexp
   ( Sexp (..)
   , SexpF (..)
