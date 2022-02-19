@@ -4,7 +4,8 @@
 -- | Parses SExp-formatted ASTs
 module SimpleParser.Examples.Ast where
 
-import Control.Monad (void)
+import Control.Monad (ap, void)
+import Control.Monad.Except (MonadError (..))
 import Data.Char (isSpace)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -42,7 +43,30 @@ data CtorRes e a =
     CtorResFail !String
   | CtorResErr !e
   | CtorResVal !a
-  deriving stock (Eq, Ord, Show)
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+instance Applicative (CtorRes e) where
+  pure = CtorResVal
+  (<*>) = ap
+
+instance Monad (CtorRes e) where
+  return = pure
+  r >>= f =
+    case r of
+      CtorResFail msg -> CtorResFail msg
+      CtorResErr err -> CtorResErr err
+      CtorResVal val -> f val
+
+instance MonadFail (CtorRes e) where
+  fail = CtorResFail
+
+instance MonadError e (CtorRes e) where
+  throwError = CtorResErr
+  catchError r h =
+    case r of
+      CtorResFail msg -> CtorResFail msg
+      CtorResErr err -> h err
+      CtorResVal val -> CtorResVal val
 
 embedCtorRes :: CtorRes e a -> AstParserM s e a
 embedCtorRes = \case

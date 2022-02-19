@@ -6,8 +6,8 @@ import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser.Examples.Ast (AstLabel (AstLabelCustom), AstParserC, AstParserM, Ctor (..), CtorDefns, CtorRes (..),
-                                  astParser, identAstParser)
+import SimpleParser.Examples.Ast (AstLabel (..), AstParserC, AstParserM, Ctor (..), CtorDefns, astParser,
+                                  identAstParser)
 
 type PropParserC s = AstParserC s
 type PropParserM s a = AstParserM s Void a
@@ -25,8 +25,8 @@ data SProp v =
 -- TODO fill these in
 mkPropCtors :: PropParserM s (SProp Text) -> CtorDefns s Void (SProp Text)
 mkPropCtors root = Map.fromList
-  [ ("<=>", Ctor2 (\a b -> CtorResVal (SPropIff a b)) root root)
-  , ("not", Ctor1 (CtorResVal . SPropNot) root)
+  [ ("<=>", Ctor2 (\a b -> pure (SPropIff a b)) root root)
+  , ("not", Ctor1 (pure . SPropNot) root)
   ]
 
 mkPropAtom :: PropParserC s => PropParserM s (SProp Text)
