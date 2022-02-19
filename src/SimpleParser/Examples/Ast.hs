@@ -85,6 +85,7 @@ embedCtorRes = \case
   CtorResVal val -> pure val
 
 data Ctor s e t where
+  Ctor0 :: CtorRes e t -> Ctor s e t
   Ctor1 :: (a -> CtorRes e t) -> AstParserM s e a -> Ctor s e t
   Ctor2 :: (a -> b -> CtorRes e t) -> AstParserM s e a -> AstParserM s e b -> Ctor s e t
   Ctor3 :: (a -> b -> c -> CtorRes e t) -> AstParserM s e a -> AstParserM s e b -> AstParserM s e c -> Ctor s e t
@@ -134,6 +135,7 @@ ctorDefnsAstParser ctors = betweenParser openParenP closeParenP (consumeMatch bl
 
 ctorAstParser :: AstParserC s => Ctor s e t -> AstParserM s e t
 ctorAstParser = \case
+  Ctor0 r -> embedCtorRes r
   Ctor1 f pa -> do
     a <- lexAstParser pa
     embedCtorRes (f a)
