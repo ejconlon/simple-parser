@@ -2,7 +2,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Parses SExp-formatted ASTs
-module SimpleParser.Examples.Ast where
+module SimpleParser.Examples.Ast
+  ( AstLabel (..)
+  , AstParserC
+  , AstParserM
+  , CtorRes (..)
+  , Ctor (..)
+  , CtorDefns
+  , astParser
+  , lexAstParser
+  , identAstParser
+  ) where
 
 import Control.Monad (ap, void)
 import Control.Monad.Except (MonadError (..))
@@ -92,27 +102,27 @@ data Defns s e t = Defns
 spaceP :: AstParserC s => AstParserM s e ()
 spaceP = spaceParser
 
-lexP :: AstParserC s => AstParserM s e a -> AstParserM s e a
-lexP = lexemeParser spaceP
+lexAstParser :: AstParserC s => AstParserM s e a -> AstParserM s e a
+lexAstParser = lexemeParser spaceP
 
 openParenP :: AstParserC s => AstParserM s e ()
-openParenP = lexP (void (matchToken '('))
+openParenP = lexAstParser (void (matchToken '('))
 
 closeParenP :: AstParserC s => AstParserM s e ()
-closeParenP = lexP (void (matchToken ')'))
+closeParenP = lexAstParser (void (matchToken ')'))
 
 nonDelimPred :: Char -> Bool
 nonDelimPred c = c /= '(' && c /= ')' && not (isSpace c)
 
 identAstParser :: AstParserC s => Maybe AstLabel -> AstParserM s e Text
-identAstParser = lexP . flip takeTokensWhile1 nonDelimPred
+identAstParser = lexAstParser . flip takeTokensWhile1 nonDelimPred
 
 astParser :: AstParserC s => AstParserM s e t -> (AstParserM s e t -> CtorDefns s e t) -> AstParserM s e t
 astParser mkAtom mkCtors = let p = recAstParser (Defns mkAtom (mkCtors p)) in p
 
 recAstParser :: AstParserC s => Defns s e t -> AstParserM s e t
 recAstParser defns = lookAheadMatch block where
-  block = MatchBlock anyToken (lexP (defAtoms defns))
+  block = MatchBlock anyToken (lexAstParser (defAtoms defns))
     [ MatchCase (Just AstLabelCtorList) (== '(') (ctorDefnsAstParser (defCtors defns))
     ]
 
@@ -125,30 +135,30 @@ ctorDefnsAstParser ctors = betweenParser openParenP closeParenP (consumeMatch bl
 ctorAstParser :: AstParserC s => Ctor s e t -> AstParserM s e t
 ctorAstParser = \case
   Ctor1 f pa -> do
-    a <- lexP pa
+    a <- lexAstParser pa
     embedCtorRes (f a)
   Ctor2 f pa pb -> do
-    a <- lexP pa
-    b <- lexP pb
+    a <- lexAstParser pa
+    b <- lexAstParser pb
     embedCtorRes (f a b)
   Ctor3 f pa pb pc -> do
-    a <- lexP pa
-    b <- lexP pb
-    c <- lexP pc
+    a <- lexAstParser pa
+    b <- lexAstParser pb
+    c <- lexAstParser pc
     embedCtorRes (f a b c)
   Ctor4 f pa pb pc pd -> do
-    a <- lexP pa
-    b <- lexP pb
-    c <- lexP pc
-    d <- lexP pd
+    a <- lexAstParser pa
+    b <- lexAstParser pb
+    c <- lexAstParser pc
+    d <- lexAstParser pd
     embedCtorRes (f a b c d)
   Ctor5 f pa pb pc pd px -> do
-    a <- lexP pa
-    b <- lexP pb
-    c <- lexP pc
-    d <- lexP pd
-    x <- lexP px
+    a <- lexAstParser pa
+    b <- lexAstParser pb
+    c <- lexAstParser pc
+    d <- lexAstParser pd
+    x <- lexAstParser px
     embedCtorRes (f a b c d x)
   CtorN f px -> do
-    xs <- greedyStarParser (lexP px)
+    xs <- greedyStarParser (lexAstParser px)
     embedCtorRes (f xs)

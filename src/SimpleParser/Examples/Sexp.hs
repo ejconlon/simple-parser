@@ -8,7 +8,6 @@ module SimpleParser.Examples.Sexp
   , SexpParserC
   , SexpParserM
   , sexpParser
-  , recSexpParser
   ) where
 
 import Control.Applicative (empty)

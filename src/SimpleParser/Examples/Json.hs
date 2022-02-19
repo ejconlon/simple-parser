@@ -6,7 +6,6 @@ module SimpleParser.Examples.Json
   , JsonParserC
   , JsonParserM
   , jsonParser
-  , recJsonParser
   ) where
 
 import Control.Monad (void)
