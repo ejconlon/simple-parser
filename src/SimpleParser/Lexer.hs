@@ -7,9 +7,10 @@ module SimpleParser.Lexer
   , applySimpleLexer
   ) where
 
-import SimpleParser.Parser (ParserT (..))
 import Data.Kind (Type)
-import SimpleParser.Result (ParseResult (..), ParseSuccess (..), ParseErrorBundle (..), ParseError (..), CompoundError (..), StreamError (..), RawError (..), MarkStack, Mark (..))
+import SimpleParser.Parser (ParserT (..))
+import SimpleParser.Result (CompoundError (..), Mark (..), MarkStack, ParseError (..), ParseErrorBundle (..),
+                            ParseResult (..), ParseSuccess (..), RawError (..), StreamError (..))
 import SimpleParser.Stream (Chunk, Token)
 
 data Lexer l1 l2 s1 s2 e1 e2 (m :: Type -> Type) = Lexer
