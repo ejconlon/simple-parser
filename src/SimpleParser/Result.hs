@@ -6,6 +6,7 @@ module SimpleParser.Result
   , coerceStreamError
   , CompoundError (..)
   , Mark (..)
+  , MarkStack
   , ParseError (..)
   , parseErrorResume
   , parseErrorLabels
