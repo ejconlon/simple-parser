@@ -8,14 +8,14 @@ module SimpleParser.Lexer
   , runParserLexed
   ) where
 
+import Control.Monad.Catch (MonadThrow)
 import Control.Monad.State.Strict (gets)
 import Data.Sequence (Seq (..))
-import SimpleParser.Parser (ParserT, greedyStarParser, Parser)
-import SimpleParser.Stream (PosStream (..), Span (Span), Stream (..))
 import qualified Data.Sequence as Seq
-import Control.Monad.Catch (MonadThrow)
-import SimpleParser.Throw (runParserEnd)
 import Data.Typeable (Typeable)
+import SimpleParser.Parser (Parser, ParserT, greedyStarParser)
+import SimpleParser.Stream (PosStream (..), Span (Span), Stream (..))
+import SimpleParser.Throw (runParserEnd)
 
 -- | A value annotated with a 'Span'
 data Spanned p a = Spanned

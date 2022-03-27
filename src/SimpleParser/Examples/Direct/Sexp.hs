@@ -11,18 +11,18 @@ module SimpleParser.Examples.Direct.Sexp
 
 import Control.Applicative (empty)
 import Control.Monad (void)
+import Control.Monad.Catch (MonadThrow)
 import Data.Char (isDigit, isSpace)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void (Void)
-import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser, Stream (..),
-                     TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser, lexemeParser,
-                     lookAheadMatch, matchToken, numParser, packChunk, popChunk, satisfyToken, sepByParser, signParser,
-                     signedNumStartPred, spaceParser, takeTokensWhile, runParserEnd)
-import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF(..))
 import Data.Typeable (Typeable)
-import Control.Monad.Catch (MonadThrow)
+import Data.Void (Void)
+import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
+                     Stream (..), TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser,
+                     lexemeParser, lookAheadMatch, matchToken, numParser, packChunk, popChunk, runParserEnd,
+                     satisfyToken, sepByParser, signParser, signedNumStartPred, spaceParser, takeTokensWhile)
+import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
 
 data SexpLabel =
     SexpLabelIdentStart

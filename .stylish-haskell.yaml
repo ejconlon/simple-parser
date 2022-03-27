@@ -39,3 +39,4 @@ language_extensions:
   - TemplateHaskell
   - TupleSections
   - TypeApplications
+  - TypeFamilies

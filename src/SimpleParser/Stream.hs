@@ -32,8 +32,8 @@ import SimpleParser.Chunked (Chunked (..), TextualChunked (..))
 
 -- | 'Stream' lets us peel off tokens and chunks for parsing with explicit state passing.
 class Chunked (Chunk s) (Token s) => Stream s where
-  type family Chunk s :: Type
-  type family Token s :: Type
+  type Chunk s :: Type
+  type Token s :: Type
 
   streamTake1 :: s -> Maybe (Token s, s)
 
@@ -63,8 +63,8 @@ class Chunked (Chunk s) (Token s) => Stream s where
 type TextualStream s = (Stream s, Token s ~ Char, TextualChunked (Chunk s))
 
 instance Stream [a] where
-  type instance Chunk [a] = [a]
-  type instance Token [a] = a
+  type Chunk [a] = [a]
+  type Token [a] = a
 
   streamTake1 = unconsChunk
   streamTakeN n s
@@ -74,8 +74,8 @@ instance Stream [a] where
   streamTakeWhile = span
 
 instance Stream (Seq a) where
-  type instance Chunk (Seq a) = Seq a
-  type instance Token (Seq a) = a
+  type Chunk (Seq a) = Seq a
+  type Token (Seq a) = a
 
   streamTake1 = unconsChunk
   streamTakeN n s
@@ -87,8 +87,8 @@ instance Stream (Seq a) where
   -- TODO(ejconlon) Specialize drops
 
 instance Stream Text where
-  type instance Chunk Text = Text
-  type instance Token Text = Char
+  type Chunk Text = Text
+  type Token Text = Char
 
   streamTake1 = T.uncons
   streamTakeN n s
@@ -100,8 +100,8 @@ instance Stream Text where
   -- TODO(ejconlon) Specialize drops
 
 instance Stream TL.Text where
-  type instance Chunk TL.Text = TL.Text
-  type instance Token TL.Text = Char
+  type Chunk TL.Text = TL.Text
+  type Token TL.Text = Char
 
   streamTake1 = TL.uncons
   streamTakeN n s
@@ -113,8 +113,8 @@ instance Stream TL.Text where
   -- TODO(ejconlon) Specialize drops
 
 instance Stream ByteString where
-  type instance Chunk ByteString = ByteString
-  type instance Token ByteString = Word8
+  type Chunk ByteString = ByteString
+  type Token ByteString = Word8
 
   streamTake1 = BS.uncons
   streamTakeN n s
@@ -126,8 +126,8 @@ instance Stream ByteString where
   -- TODO(ejconlon) Specialize drops
 
 instance Stream BSL.ByteString where
-  type instance Chunk BSL.ByteString = BSL.ByteString
-  type instance Token BSL.ByteString = Word8
+  type Chunk BSL.ByteString = BSL.ByteString
+  type Token BSL.ByteString = Word8
 
   streamTake1 = BSL.uncons
   streamTakeN n s
@@ -140,7 +140,7 @@ instance Stream BSL.ByteString where
 
 -- | 'PosStream' adds position tracking to a 'Stream'.
 class Stream s => PosStream s where
-  type family Pos s :: Type
+  type Pos s :: Type
 
   streamViewPos :: s -> Pos s
 
@@ -154,8 +154,9 @@ data OffsetStream s = OffsetStream
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance Stream s => Stream (OffsetStream s) where
-  type instance Chunk (OffsetStream s) = Chunk s
-  type instance Token (OffsetStream s) = Token s
+  type Chunk (OffsetStream s) = Chunk s
+  type Token (OffsetStream s) = Token s
+
   streamTake1 (OffsetStream o s) = fmap (second (OffsetStream (succ o))) (streamTake1 s)
   streamTakeN n (OffsetStream (Offset x) s) = fmap go (streamTakeN n s) where
     go (a, b) = (a, OffsetStream (Offset (x + chunkLength a)) b)
@@ -169,7 +170,7 @@ instance Stream s => Stream (OffsetStream s) where
     in (m, OffsetStream (Offset (x + m)) b)
 
 instance Stream s => PosStream (OffsetStream s) where
-  type instance Pos (OffsetStream s) = Offset
+  type Pos (OffsetStream s) = Offset
 
   streamViewPos (OffsetStream o _) = o
 
@@ -208,8 +209,9 @@ data LinePosStream s = LinePosStream
   } deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
-  type instance Chunk (LinePosStream s) = Chunk s
-  type instance Token (LinePosStream s) = Token s
+  type Chunk (LinePosStream s) = Chunk s
+  type Token (LinePosStream s) = Token s
+
   streamTake1 (LinePosStream p s) = fmap (\(a, b) -> (a, LinePosStream (incrLinePosToken p a) b)) (streamTake1 s)
   streamTakeN n (LinePosStream p s) = fmap go (streamTakeN n s) where
     go (a, b) = (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
@@ -220,7 +222,7 @@ instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
   -- Drops can't be specialized because we need to examine each character for newlines.
 
 instance (Stream s, Token s ~ Char) => PosStream (LinePosStream s) where
-  type instance Pos (LinePosStream s) = LinePos
+  type Pos (LinePosStream s) = LinePos
 
   streamViewPos (LinePosStream p _) = p
 

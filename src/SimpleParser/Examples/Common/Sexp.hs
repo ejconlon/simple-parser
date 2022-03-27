@@ -4,9 +4,9 @@ module SimpleParser.Examples.Common.Sexp
   , Sexp (..)
   ) where
 
-import Data.Text (Text)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
+import Data.Text (Text)
 
 data Atom =
     AtomIdent !Text

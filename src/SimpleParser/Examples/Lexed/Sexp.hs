@@ -12,18 +12,19 @@ module SimpleParser.Examples.Lexed.Sexp
 
 import Control.Applicative (empty)
 import Control.Monad (void)
+import Control.Monad.Catch (MonadThrow)
 import Data.Char (isDigit, isSpace)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Typeable (Typeable)
 import Data.Void (Void)
 import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser, lexemeParser,
-                     lookAheadMatch, matchToken, numParser, packChunk, popChunk, satisfyToken, signParser,
-                     signedNumStartPred, spaceParser, takeTokensWhile, Stream (..), popToken, greedyStarParser, runParserLexed, PosStream (..))
-import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF(..))
-import Control.Monad.Catch (MonadThrow)
-import Data.Typeable (Typeable)
+                     PosStream (..), Stream (..), TextLabel, TextualStream, anyToken, applySign, betweenParser,
+                     escapedStringParser, greedyStarParser, lexemeParser, lookAheadMatch, matchToken, numParser,
+                     packChunk, popChunk, popToken, runParserLexed, satisfyToken, signParser, signedNumStartPred,
+                     spaceParser, takeTokensWhile)
+import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
 
 -- First, our tokenizer:
 
