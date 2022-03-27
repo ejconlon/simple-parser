@@ -109,7 +109,7 @@ identAtomTP :: SexpTokParserC s => SexpTokParserM s Atom
 identAtomTP = fmap AtomIdent identifierTP
 
 atomTP :: SexpTokParserC s => SexpTokParserM s Atom
-atomTP = lookAheadMatch block where
+atomTP = lexTP (lookAheadMatch block) where
   block = MatchBlock chunk1 (fail "failed to parse sexp atom")
     [ MatchCase Nothing ((== '"') . T.head) (fmap AtomString stringTP)
     , MatchCase Nothing (unaryIdentPred '+') identAtomTP
@@ -148,7 +148,7 @@ listP root = betweenParser openParenP closeParenP (greedyStarParser root)
 
 recSexpParser :: SexpParserC s => SexpParserM s a -> SexpParserM s (SexpF a)
 recSexpParser root = lookAheadMatch block where
-  block = MatchBlock anyToken (error "impossible")
+  block = MatchBlock anyToken empty
     [ MatchCase Nothing isOpenParenTok (fmap SexpList (listP root))
     , MatchCase Nothing isCloseParenTok (fail "invalid close paren")
     , MatchCase Nothing isAtomTok (fmap SexpAtom atomP)

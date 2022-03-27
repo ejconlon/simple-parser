@@ -4,6 +4,8 @@
 module SimpleParser.Examples.Direct.Sexp
   ( SexpLabel (..)
   , SexpParserC
+  , SexpParserM
+  , sexpParser
   , runSexpParser
   ) where
 

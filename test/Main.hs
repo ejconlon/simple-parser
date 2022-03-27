@@ -16,7 +16,8 @@ import qualified Data.Text as T
 import SimpleParser
 import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
 import SimpleParser.Examples.Direct.Json (Json (..), JsonF (..), jsonParser)
-import SimpleParser.Examples.Direct.Sexp (runSexpParser)
+import qualified SimpleParser.Examples.Direct.Sexp as SexpDirect
+import qualified SimpleParser.Examples.Lexed.Sexp as SexpLexed
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -636,8 +637,10 @@ type SexpResult = Maybe Sexp
 
 testSexpCase :: TestName -> Text -> SexpResult -> TestTree
 testSexpCase name str expected = testCase ("sexp " <> name) $ do
-  let actual = runSexpParser str
-  actual @?= expected
+  let actualDirect = SexpDirect.runSexpParser str
+  actualDirect @?= expected
+  let actualLexed = SexpLexed.runSexpParser (newOffsetStream str)
+  actualLexed @?= expected
 
 testSexpTrees :: [(TestName, Text, SexpResult)] -> [TestTree]
 testSexpTrees = fmap (\(n, s, e) -> testSexpCase n s e)
