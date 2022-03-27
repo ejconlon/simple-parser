@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Parses Sexp-formatted ASTs
-module SimpleParser.Examples.Ast
+module SimpleParser.Examples.Direct.Ast
   ( AstLabel (..)
   , AstParserC
   , AstParserM

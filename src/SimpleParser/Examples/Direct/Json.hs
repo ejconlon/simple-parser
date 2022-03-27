@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Parses JSON documents
-module SimpleParser.Examples.Json
+module SimpleParser.Examples.Direct.Json
   ( Json (..)
   , JsonF (..)
   , JsonParserC

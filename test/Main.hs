@@ -14,8 +14,9 @@ import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import SimpleParser
-import SimpleParser.Examples.Json (Json (..), JsonF (..), jsonParser)
-import SimpleParser.Examples.Sexp (Atom (..), Sexp (..), SexpF (..), sexpParser)
+import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
+import SimpleParser.Examples.Direct.Json (Json (..), JsonF (..), jsonParser)
+import SimpleParser.Examples.Direct.Sexp (runSexpParser)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 import Test.Tasty.TH (defaultMainGenerator)
@@ -635,18 +636,11 @@ type SexpResult = Maybe Sexp
 
 testSexpCase :: TestName -> Text -> SexpResult -> TestTree
 testSexpCase name str expected = testCase ("sexp " <> name) $ do
-  let actual = parseSexp str
+  let actual = runSexpParser str
   actual @?= expected
 
 testSexpTrees :: [(TestName, Text, SexpResult)] -> [TestTree]
 testSexpTrees = fmap (\(n, s, e) -> testSexpCase n s e)
-
-parseSexp :: Text -> SexpResult
-parseSexp str =
-  let p = sexpParser <* matchEnd
-  in case runParser p str of
-    Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a
-    _ -> Nothing
 
 test_sexp :: [TestTree]
 test_sexp =

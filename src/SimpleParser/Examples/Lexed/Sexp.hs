@@ -13,7 +13,6 @@ module SimpleParser.Examples.Lexed.Sexp
 import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
-import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -22,27 +21,11 @@ import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), Match
                      TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser, lexemeParser,
                      lookAheadMatch, matchToken, numParser, packChunk, popChunk, satisfyToken, signParser,
                      signedNumStartPred, spaceParser, takeTokensWhile, Stream (..), popToken, greedyStarParser, runParserLexed, PosStream (..))
+import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF(..))
 import Control.Monad.Catch (MonadThrow)
 import Data.Typeable (Typeable)
 
--- First, our datatypes:
-
-data Atom =
-    AtomIdent !Text
-  | AtomString !Text
-  | AtomInt !Integer
-  | AtomSci !Scientific
-  deriving (Eq, Show)
-
-data SexpF a =
-    SexpAtom !Atom
-  | SexpList !(Seq a)
-  deriving (Eq, Show, Functor, Foldable, Traversable)
-
-newtype Sexp = Sexp { unSexp :: SexpF Sexp }
-  deriving (Eq, Show)
-
--- Now our tokenizer:
+-- First, our tokenizer:
 
 data SexpTokLabel =
     SexpTokLabelIdentStart

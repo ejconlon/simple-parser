@@ -1,40 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Parses S-expressions
-module SimpleParser.Examples.Sexp
-  ( Sexp (..)
-  , SexpF (..)
-  , Atom (..)
-  , SexpLabel (..)
+module SimpleParser.Examples.Direct.Sexp
+  ( SexpLabel (..)
   , SexpParserC
-  , SexpParserM
-  , sexpParser
+  , runSexpParser
   ) where
 
 import Control.Applicative (empty)
 import Control.Monad (void)
 import Data.Char (isDigit, isSpace)
-import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
+import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser, Stream (..),
                      TextLabel, TextualStream, anyToken, applySign, betweenParser, escapedStringParser, lexemeParser,
                      lookAheadMatch, matchToken, numParser, packChunk, popChunk, satisfyToken, sepByParser, signParser,
-                     signedNumStartPred, spaceParser, takeTokensWhile)
-
-data Atom =
-    AtomIdent !Text
-  | AtomString !Text
-  | AtomInt !Integer
-  | AtomSci !Scientific
-  deriving (Eq, Show)
-
-data SexpF a =
-    SexpAtom !Atom
-  | SexpList !(Seq a)
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+                     signedNumStartPred, spaceParser, takeTokensWhile, runParserEnd)
+import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF(..))
+import Data.Typeable (Typeable)
+import Control.Monad.Catch (MonadThrow)
 
 data SexpLabel =
     SexpLabelIdentStart
@@ -51,9 +37,6 @@ instance ExplainLabel SexpLabel where
 
 instance EmbedTextLabel SexpLabel where
   embedTextLabel = SexpLabelEmbedText
-
-newtype Sexp = Sexp { unSexp :: SexpF Sexp }
-  deriving (Eq, Show)
 
 type SexpParserC s = TextualStream s
 
@@ -137,3 +120,9 @@ atomP = lexP (lookAheadMatch block) where
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)
 listP root = lexP (betweenParser openParenP closeParenP (sepByParser root spaceP))
+
+runSexpParser :: (
+  Typeable s, Typeable (Token s), Typeable (Chunk s),
+  Show s, Show (Token s), Show (Chunk s),
+  SexpParserC s, MonadThrow m) => s -> m Sexp
+runSexpParser = runParserEnd sexpParser

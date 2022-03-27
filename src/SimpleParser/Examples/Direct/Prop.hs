@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Parses simple Sexp-formatted logical propositions
-module SimpleParser.Examples.Prop where
+module SimpleParser.Examples.Direct.Prop where
 
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser.Examples.Ast (AstLabel (..), AstParserC, AstParserM, Ctor (..), CtorDefns, astParser,
-                                  identAstParser)
+import SimpleParser.Examples.Direct.Ast (AstLabel (..), AstParserC, AstParserM, Ctor (..), CtorDefns, astParser, identAstParser)
 
 type PropParserC s = AstParserC s
 type PropParserM s a = AstParserM s Void a
