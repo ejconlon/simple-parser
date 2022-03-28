@@ -1,5 +1,5 @@
 name:                simple-parser
-version:             0.11.0
+version:             0.12.0
 github:              "ejconlon/simple-parser"
 license:             BSD3
 author:              "Eric Conlon"
@@ -33,6 +33,7 @@ default-extensions:
 - DeriveFoldable
 - DeriveTraversable
 - DerivingStrategies
+- DerivingVia
 - FlexibleContexts
 - FlexibleInstances
 - FunctionalDependencies

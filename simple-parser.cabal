@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 180d046a2a3f8dc8692f2667efbbe7f11bbf34969c2e11daa7abb119b50517bb
+-- hash: cfc5b1cb72599e6ff1fdcda8ef9bca96a91c3fb347c172a0bcf61c9fd18f7e48
 
 name:           simple-parser
-version:        0.11.0
+version:        0.12.0
 synopsis:       Simple parser combinators
 description:    Please see the README on GitHub at <https://github.com/ejconlon/simple-parser#readme>
 category:       Parsing
@@ -60,6 +60,7 @@ library
       DeriveFoldable
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       FlexibleContexts
       FlexibleInstances
       FunctionalDependencies
@@ -99,6 +100,7 @@ test-suite simple-parser-test
       DeriveFoldable
       DeriveTraversable
       DerivingStrategies
+      DerivingVia
       FlexibleContexts
       FlexibleInstances
       FunctionalDependencies

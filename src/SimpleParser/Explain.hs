@@ -2,7 +2,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module SimpleParser.Explain
-  ( ExplainLabel (..)
+  ( TextBuildable (..)
+  , ShowTextBuildable (..)
+  , ExplainLabel (..)
   , ErrorExplanation (..)
   , ExplainError (..)
   , Explainable
@@ -18,13 +20,44 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import Data.Void (Void, absurd)
-import SimpleParser.Chunked (TextualChunked (..))
 import SimpleParser.Common (CompoundTextLabel (..), TextLabel (..))
 import SimpleParser.Result (CompoundError (..), ParseError (..), RawError (..), StreamError (..),
                             parseErrorEnclosingLabels, parseErrorNarrowestSpan)
-import SimpleParser.Stream (HasLinePos (..), PosStream (..), Span (..), Stream (..), TextualStream)
+import SimpleParser.Stream (HasLinePos (..), PosStream (..), Span (..), Stream (..))
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
+
+-- | Types that can be rendered into a textual error message
+-- (Effectively a fancy Show)
+class TextBuildable a where
+  buildText :: a -> Builder
+
+instance TextBuildable Char where
+  buildText = TB.char
+
+instance TextBuildable String where
+  buildText = TB.string
+
+instance TextBuildable Text where
+  buildText = TB.text
+
+instance TextBuildable Builder where
+  buildText = id
+
+buildTextFromList :: TextBuildable a => [a] -> Builder
+buildTextFromList ss = "[" <> TB.intercalate ", " (fmap buildText ss) <> "]"
+
+instance TextBuildable a => TextBuildable [a] where
+  buildText = buildTextFromList
+
+instance TextBuildable a => TextBuildable (Seq a) where
+  buildText = buildTextFromList . toList
+
+-- | Deriving-Via wrapper for 'TextBuildable' for types with 'Show'
+newtype ShowTextBuildable a = ShowTextBuildable { unShowTextBuildable :: a }
+
+instance Show a => TextBuildable (ShowTextBuildable a) where
+  buildText = TB.string . show . unShowTextBuildable
 
 class ExplainLabel l where
   explainLabel :: l -> Builder
@@ -63,25 +96,25 @@ instance ExplainError Void where
 endMsg :: Text
 endMsg = "end of stream"
 
-tokB :: Char -> Builder
-tokB t = "token '" <> TB.char t <> "'"
+tokB :: TextBuildable a => a -> Builder
+tokB t = "token '" <> buildText t <> "'"
 
-tokT :: Char -> Text
+tokT :: TextBuildable a => a -> Text
 tokT = TB.run . tokB
 
-mayTokT :: Maybe Char -> Text
+mayTokT :: TextBuildable a => Maybe a -> Text
 mayTokT = maybe endMsg tokT
 
-chunkB :: TextualChunked chunk => chunk -> Builder
-chunkB k = "chunk \"" <> buildChunk k <> "\""
+chunkB :: TextBuildable a => a -> Builder
+chunkB k = "chunk \"" <> buildText k <> "\""
 
-chunkT :: TextualChunked chunk => chunk -> Text
+chunkT :: TextBuildable a => a -> Text
 chunkT = TB.run . chunkB
 
-mayChunkT :: TextualChunked chunk => Maybe chunk -> Text
+mayChunkT :: TextBuildable a => Maybe a -> Text
 mayChunkT = maybe endMsg chunkT
 
-instance (Token s ~ Char, TextualChunked (Chunk s)) => ExplainError (StreamError s) where
+instance (TextBuildable (Token s), TextBuildable (Chunk s)) => ExplainError (StreamError s) where
   explainError (StreamError re) =
     case re of
       RawErrorMatchEnd actTok ->
@@ -101,14 +134,14 @@ instance (Token s ~ Char, TextualChunked (Chunk s)) => ExplainError (StreamError
       RawErrorDropTokensWhile1 mayActTok ->
         ErrorExplanation "failed to drop 1 or more tokens" Nothing (Just (mayTokT mayActTok))
 
-instance (Token s ~ Char, TextualChunked (Chunk s), ExplainError e) => ExplainError (CompoundError s e) where
+instance (TextBuildable (Token s), TextBuildable (Chunk s), ExplainError e) => ExplainError (CompoundError s e) where
   explainError ce =
     case ce of
       CompoundErrorStream se -> explainError se
       CompoundErrorFail msg -> ErrorExplanation msg Nothing Nothing
       CompoundErrorCustom e -> explainError e
 
-type Explainable l s e = (TextualStream s, PosStream s, ExplainLabel l, ExplainError e)
+type Explainable l s e = (PosStream s, ExplainLabel l, ExplainError e)
 
 data ParseErrorExplanation p = ParseErrorExplanation
   { peeSpan :: !(Span p)
@@ -117,7 +150,7 @@ data ParseErrorExplanation p = ParseErrorExplanation
   , peeErrExp :: !ErrorExplanation
   } deriving (Eq, Show)
 
-explainParseError :: Explainable l s e => ParseError l s e -> ParseErrorExplanation (Pos s)
+explainParseError :: (TextBuildable (Token s), TextBuildable (Chunk s), Explainable l s e) => ParseError l s e -> ParseErrorExplanation (Pos s)
 explainParseError pe =
   let (mayLab, sp) = parseErrorNarrowestSpan pe
       context = fmap explainLabelText (parseErrorEnclosingLabels pe)

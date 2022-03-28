@@ -7,6 +7,11 @@ module SimpleParser.Examples.Lexed.Sexp
   , Atom (..)
   , SexpTokLabel (..)
   , SexpTokParserC
+  , SexpTokParserM
+  , sexpTokParser
+  , SexpParserC
+  , SexpParserM
+  , sexpParser
   , runSexpParser
   ) where
 
@@ -20,10 +25,10 @@ import qualified Data.Text as T
 import Data.Typeable (Typeable)
 import Data.Void (Void)
 import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     PosStream (..), Stream (..), TextLabel, TextualStream, anyToken, applySign, betweenParser,
-                     escapedStringParser, greedyStarParser, lexemeParser, lookAheadMatch, matchToken, numParser,
-                     packChunk, popChunk, popToken, runParserLexed, satisfyToken, signParser, signedNumStartPred,
-                     spaceParser, takeTokensWhile)
+                     PosStream (..), ShowTextBuildable (..), Stream (..), TextBuildable (..), TextLabel, TextualStream,
+                     anyToken, applySign, betweenParser, escapedStringParser, greedyStarParser, lexemeParser,
+                     lookAheadMatch, matchToken, numParser, packChunk, popChunk, popToken, runParserLexed, satisfyToken,
+                     signParser, signedNumStartPred, spaceParser, takeTokensWhile)
 import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
 
 -- First, our tokenizer:
@@ -51,6 +56,7 @@ data SexpTok =
   | SexpTokCloseParen
   | SexpTokAtom !Atom
   deriving stock (Eq, Show)
+  deriving (TextBuildable) via (ShowTextBuildable SexpTok)
 
 nonDelimPred :: Char -> Bool
 nonDelimPred c = c /= '(' && c /= ')' && not (isSpace c)
@@ -138,11 +144,11 @@ isCloseParenTok = \case { SexpTokCloseParen -> True; _ -> False }
 isAtomTok = \case { SexpTokAtom _ -> True; _ -> False }
 
 atomP :: SexpParserC s => SexpParserM s Atom
-atomP = popToken >>= \case { Just (SexpTokAtom a) -> pure a; _ -> empty }
+atomP = popToken >>= \case { Just (SexpTokAtom a) -> pure a; _ -> fail "invalid atom" }
 
 openParenP, closeParenP :: SexpParserC s => SexpParserM s ()
-openParenP = popToken >>= \case { Just SexpTokOpenParen -> pure (); _ -> empty }
-closeParenP = popToken >>= \case { Just SexpTokCloseParen -> pure (); _ -> empty }
+openParenP = void (matchToken SexpTokOpenParen)
+closeParenP = void (matchToken SexpTokCloseParen)
 
 listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)
 listP root = betweenParser openParenP closeParenP (greedyStarParser root)
@@ -164,4 +170,4 @@ runSexpParser :: (
   Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable (Pos s),
   Show s, Show (Token s), Show (Chunk s), Show (Pos s),
   SexpTokParserC s, MonadThrow m) => s -> m Sexp
-runSexpParser = runParserLexed sexpTokParser sexpParser
+runSexpParser = runParserLexed sexpTokParser id sexpParser

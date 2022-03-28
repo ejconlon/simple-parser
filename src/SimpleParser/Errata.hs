@@ -11,14 +11,15 @@ import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
 import qualified Data.Text as T
 import Errata (Block, PointerStyle, Style, blockMerged')
-import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), explainParseError)
+import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), TextBuildable,
+                             explainParseError)
 import SimpleParser.Result (ParseError, ParseErrorBundle (ParseErrorBundle), ParseResult (..))
-import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..))
+import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..), Stream (Chunk, Token))
 
-type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s))
+type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s), TextBuildable (Token s), TextBuildable (Chunk s))
 
 errataExplanation :: HasLinePos p => Style -> PointerStyle  -> FilePath -> ParseErrorExplanation p -> Block
-errataExplanation bsty psty fp (ParseErrorExplanation sp context mayDetails  (ErrorExplanation reason mayExpected mayActual)) =
+errataExplanation bsty psty fp (ParseErrorExplanation sp context mayDetails (ErrorExplanation reason mayExpected mayActual)) =
   let Span startPos endPos = sp
       startLine = unLine (viewLine startPos)
       startCol = unCol (viewCol startPos)

@@ -2,6 +2,7 @@
 
 module SimpleParser.Interactive
   ( ErrorStyle (..)
+  , renderInteractive
   , parseInteractiveStyle
   , parseInteractive
   ) where
@@ -13,7 +14,7 @@ import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy.IO as TLIO
 import Errata (Errata (..), prettyErrors)
 import Errata.Styles (fancyPointer, fancyStyle)
-import SimpleParser.Errata (errataParseError)
+import SimpleParser.Errata (LinePosExplainable, errataParseError)
 import SimpleParser.Explain (Explainable, buildAllParseErrorExplanations, explainParseError)
 import SimpleParser.Input (matchEnd)
 import SimpleParser.Parser (Parser, runParser)
@@ -26,23 +27,29 @@ data ErrorStyle =
   | ErrorStyleExplain
   deriving stock (Eq, Show)
 
-parseInteractiveStyle :: (s ~ LinePosStream Text, Explainable l s e, Show a) => ErrorStyle -> Parser l s e a -> String -> IO ()
-parseInteractiveStyle errStyle parser input =
-  case runParser (parser <* matchEnd) (newLinePosStream (T.pack input)) of
-    Nothing ->
-      putStrLn "No result."
-    Just (ParseResultError (ParseErrorBundle es)) ->
-      case errStyle of
-        ErrorStyleErrata ->
-          let blocks = fmap (errataParseError fancyStyle fancyPointer "<interactive>") (toList es)
-              errata = Errata Nothing blocks Nothing
-              pretty = prettyErrors input [errata]
-          in TLIO.putStrLn pretty
-        ErrorStyleExplain ->
-          let b = buildAllParseErrorExplanations (fmap explainParseError (toList es))
-          in TIO.putStrLn (TB.run ("Errors:\n" <> b))
-    Just (ParseResultSuccess (ParseSuccess _ a)) ->
-      putStrLn "Success:" *> print a
+renderInteractive :: (LinePosExplainable l s e) => ErrorStyle -> String -> Maybe (ParseResult l s e a) -> IO ()
+renderInteractive errStyle input = \case
+  Nothing ->
+    putStrLn "No result"
+  Just (ParseResultError (ParseErrorBundle es)) ->
+    case errStyle of
+      ErrorStyleErrata ->
+        let blocks = fmap (errataParseError fancyStyle fancyPointer "<interactive>") (toList es)
+            errata = Errata Nothing blocks Nothing
+            pretty = prettyErrors input [errata]
+        in TLIO.putStrLn pretty
+      ErrorStyleExplain ->
+        let b = buildAllParseErrorExplanations (fmap explainParseError (toList es))
+        in TIO.putStrLn (TB.run ("Errors:\n" <> b))
+  Just (ParseResultSuccess _) ->
+    putStrLn "Success"
 
-parseInteractive :: (s ~ LinePosStream Text, Explainable l s e, Show a) => Parser l s e a -> String -> IO ()
+parseInteractiveStyle :: (s ~ LinePosStream Text, Explainable l s e) => ErrorStyle -> Parser l s e a -> String -> IO (Maybe a)
+parseInteractiveStyle errStyle parser input = do
+  let mres = runParser (parser <* matchEnd) (newLinePosStream (T.pack input))
+  renderInteractive errStyle input mres
+  let res = case mres of { Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a; _ -> Nothing }
+  pure res
+
+parseInteractive :: (s ~ LinePosStream Text, Explainable l s e) => Parser l s e a -> String -> IO (Maybe a)
 parseInteractive = parseInteractiveStyle ErrorStyleErrata
