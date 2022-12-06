@@ -36,10 +36,6 @@ data LexedStream p a = LexedStream
   , lsEndPos :: !p
   } deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
-newtype LexedChunk a = LexedChunk { unLexedChunk :: Seq a }
-  deriving stock (Show)
-  deriving newtype (Eq)
-
 instance Stream (LexedStream p a) where
   type Token (LexedStream p a) = a
   type Chunk (LexedStream p a) = Seq a
@@ -114,7 +110,6 @@ lexedParseInteractive :: (
   ExplainLabel l1, ExplainError e1, ExplainLabel l2, ExplainError e2) =>
   Parser l1 s e1 a -> (LexedStream (Pos s) a -> LexedStream (Pos s) a) -> Parser l2 (LexedStream (Pos s) a) e2 b -> String -> IO (Maybe b)
 lexedParseInteractive lp f p input = do
-  -- TODO renderInteractive TWICE
   let lexRes = runParser (lexedParser lp <* matchEnd) (newLinePosStream (T.pack input))
   putStrLn "Lex result:"
   renderInteractive ErrorStyleErrata input lexRes
