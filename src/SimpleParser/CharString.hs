@@ -3,7 +3,8 @@ module SimpleParser.CharString
   , LazyCharString (..)
   , toLazyCharString
   , toStrictCharString
-  ) where
+  )
+where
 
 import Data.Bifunctor (second)
 import Data.ByteString (ByteString)
@@ -21,11 +22,13 @@ import qualified Text.Builder as TB
 
 newtype CharString = CharString
   { unCharString :: ByteString
-  } deriving newtype (Eq, Ord, Show, Semigroup, Monoid, IsString)
+  }
+  deriving newtype (Eq, Ord, Show, Semigroup, Monoid, IsString)
 
 newtype LazyCharString = LazyCharString
   { unLazyCharString :: BSL.ByteString
-  } deriving newtype (Eq, Ord, Show, Semigroup, Monoid, IsString)
+  }
+  deriving newtype (Eq, Ord, Show, Semigroup, Monoid, IsString)
 
 toLazyCharString :: CharString -> LazyCharString
 toLazyCharString = undefined

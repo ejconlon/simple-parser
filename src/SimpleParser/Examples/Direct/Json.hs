@@ -7,19 +7,38 @@ module SimpleParser.Examples.Direct.Json
   , JsonParserC
   , JsonParserM
   , jsonParser
-  ) where
+  )
+where
 
 import Control.Monad (void)
 import Data.Scientific (Scientific)
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import Data.Void (Void)
-import SimpleParser (MatchBlock (..), MatchCase (..), Parser, Stream (..), TextLabel, TextualChunked (..),
-                     TextualStream, anyToken, betweenParser, escapedStringParser, lexemeParser, lookAheadMatch,
-                     matchChunk, matchToken, orParser, scientificParser, sepByParser, signedNumStartPred, spaceParser)
+import SimpleParser
+  ( MatchBlock (..)
+  , MatchCase (..)
+  , Parser
+  , Stream (..)
+  , TextLabel
+  , TextualChunked (..)
+  , TextualStream
+  , anyToken
+  , betweenParser
+  , escapedStringParser
+  , lexemeParser
+  , lookAheadMatch
+  , matchChunk
+  , matchToken
+  , orParser
+  , scientificParser
+  , sepByParser
+  , signedNumStartPred
+  , spaceParser
+  )
 
-data JsonF a =
-    JsonObject !(Seq (Text, a))
+data JsonF a
+  = JsonObject !(Seq (Text, a))
   | JsonArray !(Seq a)
   | JsonString !Text
   | JsonBool !Bool
@@ -27,7 +46,7 @@ data JsonF a =
   | JsonNull
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
-newtype Json = Json { unJson :: JsonF Json } deriving (Eq, Show)
+newtype Json = Json {unJson :: JsonF Json} deriving (Eq, Show)
 
 type JsonParserC s = (TextualStream s, Eq (Chunk s))
 
@@ -40,15 +59,19 @@ isBoolStartPred :: Char -> Bool
 isBoolStartPred c = c == 't' || c == 'f'
 
 recJsonParser :: JsonParserC s => JsonParserM s a -> JsonParserM s (JsonF a)
-recJsonParser root = lexP (lookAheadMatch block) where
-  block = MatchBlock anyToken (fail "failed to parse json document")
-    [ MatchCase Nothing (== '{') (objectP (objectPairP root))
-    , MatchCase Nothing (== '[') (arrayP root)
-    , MatchCase Nothing (== '"') stringP
-    , MatchCase Nothing signedNumStartPred numP
-    , MatchCase Nothing isBoolStartPred boolP
-    , MatchCase Nothing (== 'n') nullP
-    ]
+recJsonParser root = lexP (lookAheadMatch block)
+ where
+  block =
+    MatchBlock
+      anyToken
+      (fail "failed to parse json document")
+      [ MatchCase Nothing (== '{') (objectP (objectPairP root))
+      , MatchCase Nothing (== '[') (arrayP root)
+      , MatchCase Nothing (== '"') stringP
+      , MatchCase Nothing signedNumStartPred numP
+      , MatchCase Nothing isBoolStartPred boolP
+      , MatchCase Nothing (== 'n') nullP
+      ]
 
 spaceP :: JsonParserC s => JsonParserM s ()
 spaceP = spaceParser

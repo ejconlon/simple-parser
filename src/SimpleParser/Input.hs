@@ -20,15 +20,22 @@ module SimpleParser.Input
   , dropTokensWhile1
   , matchToken
   , matchChunk
-  ) where
+  )
+where
 
 import Control.Monad.State (gets, state)
 import Data.Bifunctor (first)
 import Data.Maybe (isNothing)
 import SimpleParser.Chunked (Chunked (..))
 import SimpleParser.Parser (ParserT (..), markWithOptStateParser, markWithStateParser)
-import SimpleParser.Result (CompoundError (..), ParseError (..), ParseErrorBundle (..), ParseResult (..), RawError (..),
-                            StreamError (..))
+import SimpleParser.Result
+  ( CompoundError (..)
+  , ParseError (..)
+  , ParseErrorBundle (..)
+  , ParseResult (..)
+  , RawError (..)
+  , StreamError (..)
+  )
 import SimpleParser.Stack (emptyStack)
 import SimpleParser.Stream (Stream (..))
 
@@ -93,16 +100,17 @@ satisfyToken ml pcate = withToken ml $ \mu ->
 -- | Folds over a stream of tokens while the boolean value is true.
 -- Always succeeds, even at end of stream. Only consumes greediest match. (SAFE)
 foldTokensWhile :: (Stream s, Monad m) => (Token s -> x -> (Bool, x)) -> x -> ParserT l s e m x
-foldTokensWhile processNext = go where
+foldTokensWhile processNext = go
+ where
   go !x = do
     m <- peekToken
     case m of
       Nothing -> pure x
       Just c ->
         let (ok, newX) = processNext c x
-        in if ok
-          then popToken *> go newX
-          else pure x
+        in  if ok
+              then popToken *> go newX
+              else pure x
 
 -- | Take tokens into a chunk while they satisfy the given predicate.
 -- Always succeeds, even at end of stream. May return an empty chunk. Only yields greediest match. (SAFE)

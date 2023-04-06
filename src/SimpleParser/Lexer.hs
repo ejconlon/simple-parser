@@ -7,7 +7,8 @@ module SimpleParser.Lexer
   , lexedParser
   , runParserLexed
   , lexedParseInteractive
-  ) where
+  )
+where
 
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.State.Strict (gets)
@@ -28,13 +29,15 @@ import SimpleParser.Throw (runParserEnd)
 data Spanned p a = Spanned
   { spannedSpan :: !(Span p)
   , spannedValue :: !a
-  } deriving stock (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
 -- | A materialized sequence of 'Spanned' values
 data LexedStream p a = LexedStream
   { lsTokens :: !(Seq (Spanned p a))
   , lsEndPos :: !p
-  } deriving stock (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
 instance Stream (LexedStream p a) where
   type Token (LexedStream p a) = a
@@ -50,17 +53,17 @@ instance Stream (LexedStream p a) where
     | Seq.null ss = Nothing
     | otherwise =
         let (out, rest) = Seq.splitAt n ss
-        in Just (fmap spannedValue out, LexedStream rest ep)
+        in  Just (fmap spannedValue out, LexedStream rest ep)
 
   streamTakeWhile f (LexedStream ss ep) =
     let (out, rest) = Seq.spanl (f . spannedValue) ss
-    in (fmap spannedValue out, LexedStream rest ep)
+    in  (fmap spannedValue out, LexedStream rest ep)
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 -- | Position in a 'LexedStream'
-data LexedSpan p =
-    LexedSpanElem !(Span p)
+data LexedSpan p
+  = LexedSpanElem !(Span p)
   | LexedSpanEnd !p
   deriving stock (Eq, Show)
 
@@ -94,21 +97,51 @@ lexedParser p = LexedStream <$> greedyStarParser (spannedParser p) <*> gets stre
 
 -- | Similar to 'runParserEnd' - first lexes the entire stream, applies the given cleanup function,
 -- then runs the second parser over the results
-runParserLexed :: (
-  Typeable l1, Typeable e1, Typeable s, Typeable (Token s), Typeable (Chunk s),
-  Show l1, Show e1, Show s, Show (Token s), Show (Chunk s),
-  Typeable l2, Typeable e2, Typeable (Pos s), Typeable a,
-  Show l2, Show e2, Show (Pos s), Show a,
-  PosStream s, MonadThrow m) => Parser l1 s e1 a -> (LexedStream (Pos s) a -> LexedStream (Pos s) a) -> Parser l2 (LexedStream (Pos s) a) e2 b -> s -> m b
+runParserLexed
+  :: ( Typeable l1
+     , Typeable e1
+     , Typeable s
+     , Typeable (Token s)
+     , Typeable (Chunk s)
+     , Show l1
+     , Show e1
+     , Show s
+     , Show (Token s)
+     , Show (Chunk s)
+     , Typeable l2
+     , Typeable e2
+     , Typeable (Pos s)
+     , Typeable a
+     , Show l2
+     , Show e2
+     , Show (Pos s)
+     , Show a
+     , PosStream s
+     , MonadThrow m
+     )
+  => Parser l1 s e1 a
+  -> (LexedStream (Pos s) a -> LexedStream (Pos s) a)
+  -> Parser l2 (LexedStream (Pos s) a) e2 b
+  -> s
+  -> m b
 runParserLexed lp f p s = do
   ls <- runParserEnd (lexedParser lp) s
   runParserEnd p (f ls)
 
 -- | Similar to 'parseInteractive'
-lexedParseInteractive :: (
-  s ~ LinePosStream Text, TextBuildable a,
-  ExplainLabel l1, ExplainError e1, ExplainLabel l2, ExplainError e2) =>
-  Parser l1 s e1 a -> (LexedStream (Pos s) a -> LexedStream (Pos s) a) -> Parser l2 (LexedStream (Pos s) a) e2 b -> String -> IO (Maybe b)
+lexedParseInteractive
+  :: ( s ~ LinePosStream Text
+     , TextBuildable a
+     , ExplainLabel l1
+     , ExplainError e1
+     , ExplainLabel l2
+     , ExplainError e2
+     )
+  => Parser l1 s e1 a
+  -> (LexedStream (Pos s) a -> LexedStream (Pos s) a)
+  -> Parser l2 (LexedStream (Pos s) a) e2 b
+  -> String
+  -> IO (Maybe b)
 lexedParseInteractive lp f p input = do
   let lexRes = runParser (lexedParser lp <* matchEnd) (newLinePosStream (T.pack input))
   putStrLn "Lex result:"
@@ -118,6 +151,6 @@ lexedParseInteractive lp f p input = do
       let parseRes = runParser (p <* matchEnd) (f ls)
       putStrLn "Parse result:"
       renderInteractive ErrorStyleErrata input parseRes
-      let res = case parseRes of { Just (ParseResultSuccess (ParseSuccess _ b)) -> Just b; _ -> Nothing }
+      let res = case parseRes of Just (ParseResultSuccess (ParseSuccess _ b)) -> Just b; _ -> Nothing
       pure res
     _ -> pure Nothing

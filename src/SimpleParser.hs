@@ -17,7 +17,8 @@ module SimpleParser
   , module SimpleParser.Stack
   , module SimpleParser.Stream
   , module SimpleParser.Throw
-  ) where
+  )
+where
 
 import SimpleParser.CharString
 import SimpleParser.Chunked

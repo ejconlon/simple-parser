@@ -5,7 +5,8 @@ module SimpleParser.Interactive
   , renderInteractive
   , parseInteractiveStyle
   , parseInteractive
-  ) where
+  )
+where
 
 import Data.Foldable (toList)
 import Data.Text (Text)
@@ -22,8 +23,8 @@ import SimpleParser.Result (ParseErrorBundle (..), ParseResult (..), ParseSucces
 import SimpleParser.Stream (LinePosStream, newLinePosStream)
 import qualified Text.Builder as TB
 
-data ErrorStyle =
-    ErrorStyleErrata
+data ErrorStyle
+  = ErrorStyleErrata
   | ErrorStyleExplain
   deriving stock (Eq, Show)
 
@@ -37,10 +38,10 @@ renderInteractive errStyle input = \case
         let blocks = fmap (errataParseError fancyStyle fancyPointer "<interactive>") (toList es)
             errata = Errata Nothing blocks Nothing
             pretty = prettyErrors input [errata]
-        in TLIO.putStrLn pretty
+        in  TLIO.putStrLn pretty
       ErrorStyleExplain ->
         let b = buildAllParseErrorExplanations (fmap explainParseError (toList es))
-        in TIO.putStrLn (TB.run ("Errors:\n" <> b))
+        in  TIO.putStrLn (TB.run ("Errors:\n" <> b))
   Just (ParseResultSuccess _) ->
     putStrLn "Success"
 
@@ -48,7 +49,7 @@ parseInteractiveStyle :: (s ~ LinePosStream Text, Explainable l s e) => ErrorSty
 parseInteractiveStyle errStyle parser input = do
   let mres = runParser (parser <* matchEnd) (newLinePosStream (T.pack input))
   renderInteractive errStyle input mres
-  let res = case mres of { Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a; _ -> Nothing }
+  let res = case mres of Just (ParseResultSuccess (ParseSuccess _ a)) -> Just a; _ -> Nothing
   pure res
 
 parseInteractive :: (s ~ LinePosStream Text, Explainable l s e) => Parser l s e a -> String -> IO (Maybe a)

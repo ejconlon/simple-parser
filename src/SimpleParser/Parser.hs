@@ -30,7 +30,8 @@ module SimpleParser.Parser
   , unmarkParser
   , commitParser
   , onEmptyParser
-  ) where
+  )
+where
 
 import Control.Applicative (Alternative (..), liftA2)
 import Control.Monad (MonadPlus (..), ap, (>=>))
@@ -46,14 +47,23 @@ import qualified Data.Sequence.NonEmpty as NESeq
 import Data.Text (Text)
 import qualified Data.Text as T
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Result (CompoundError (..), Mark (..), ParseError (..), ParseErrorBundle (..), ParseResult (..),
-                            ParseSuccess (..), markParseError, parseErrorResume, unmarkParseError)
+import SimpleParser.Result
+  ( CompoundError (..)
+  , Mark (..)
+  , ParseError (..)
+  , ParseErrorBundle (..)
+  , ParseResult (..)
+  , ParseSuccess (..)
+  , markParseError
+  , parseErrorResume
+  , unmarkParseError
+  )
 import SimpleParser.Stack (emptyStack)
 
 -- | A 'ParserT' is a state/error/list transformer useful for parsing.
 -- All MTL instances are for this transformer only. If, for example, your effect
 -- has its own 'MonadState' instance, you'll have to use 'lift get' instead of 'get'.
-newtype ParserT l s e m a = ParserT { runParserT :: s -> m (Maybe (ParseResult l s e a)) }
+newtype ParserT l s e m a = ParserT {runParserT :: s -> m (Maybe (ParseResult l s e a))}
   deriving (Functor)
 
 -- | Use 'Parser' if you have no need for other monadic effects.
@@ -73,14 +83,15 @@ instance Monad m => Applicative (ParserT l s e m) where
 
 -- | Monadic bind
 bindParser :: Monad m => ParserT l s e m a -> (a -> ParserT l s e m b) -> ParserT l s e m b
-bindParser parser f = ParserT (runParserT parser >=> go) where
+bindParser parser f = ParserT (runParserT parser >=> go)
+ where
   go mres =
     case mres of
       Nothing -> pure Nothing
       Just res ->
-          case res of
-            ParseResultError errs -> pure (Just (ParseResultError errs))
-            ParseResultSuccess (ParseSuccess t a) -> runParserT (f a) t
+        case res of
+          ParseResultError errs -> pure (Just (ParseResultError errs))
+          ParseResultSuccess (ParseSuccess t a) -> runParserT (f a) t
 
 instance Monad m => Monad (ParserT l s e m) where
   return = pure
@@ -93,7 +104,8 @@ emptyParser = ParserT (const (pure Nothing))
 -- | Yields from the first parser of the two that returns a successfull result.
 -- Otherwise will merge and yield all errors.
 orParser :: Monad m => ParserT l s e m a -> ParserT l s e m a -> ParserT l s e m a
-orParser one two = ParserT (\s -> runParserT one s >>= go1 s) where
+orParser one two = ParserT (\s -> runParserT one s >>= go1 s)
+ where
   go1 s mres1 =
     case mres1 of
       Nothing -> runParserT two s >>= go2 empty
@@ -113,7 +125,8 @@ orParser one two = ParserT (\s -> runParserT one s >>= go1 s) where
 -- | Yields the LONGEST string of 0 or more successes of the given parser.
 -- Failures will be silenced.
 greedyStarParser :: (Chunked seq elem, Monad m) => ParserT l s e m elem -> ParserT l s e m seq
-greedyStarParser parser = go [] where
+greedyStarParser parser = go []
+ where
   opt = optionalParser parser
   go !acc = do
     res <- opt
@@ -123,7 +136,8 @@ greedyStarParser parser = go [] where
 
 -- | Same as 'greedyStarParser' but discards the result.
 greedyStarParser_ :: Monad m => ParserT l s e m a -> ParserT l s e m ()
-greedyStarParser_ parser = go where
+greedyStarParser_ parser = go
+ where
   opt = optionalParser parser
   go = do
     res <- opt
@@ -157,47 +171,48 @@ instance Monad m => MonadState s (ParserT l s e m) where
 
 -- | Catch only a subset of custom errors. This preserves label information vs rethrowing.
 catchJustParser :: Monad m => (e -> Maybe b) -> ParserT l s e m a -> (b -> ParserT l s e m a) -> ParserT l s e m a
-catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >>= go s0) where
-    go s0 mres =
-      case mres of
-        Nothing -> pure Nothing
-        Just res ->
-          case res of
-            ParseResultSuccess _ ->
-              -- Nothing to catch, yield existing success
-              pure mres
-            ParseResultError (ParseErrorBundle es) ->
-              -- Find first custom error to handle
-              goSplit s0 Empty (NESeq.toSeq es)
+catchJustParser filterer parser handler = ParserT (\s0 -> runParserT parser s0 >>= go s0)
+ where
+  go s0 mres =
+    case mres of
+      Nothing -> pure Nothing
+      Just res ->
+        case res of
+          ParseResultSuccess _ ->
+            -- Nothing to catch, yield existing success
+            pure mres
+          ParseResultError (ParseErrorBundle es) ->
+            -- Find first custom error to handle
+            goSplit s0 Empty (NESeq.toSeq es)
 
-    goSplit s0 beforeEs afterEs =
-      case seqPartition extractCustomError afterEs of
-        Nothing ->
-          -- No next custom error, finally yield all other errors
-          pure (maybe empty (pure . ParseResultError . ParseErrorBundle) (NESeq.nonEmptySeq (beforeEs <> afterEs)))
-        Just sep ->
-          -- Found custom error - handle it
-          goHandle s0 beforeEs sep
+  goSplit s0 beforeEs afterEs =
+    case seqPartition extractCustomError afterEs of
+      Nothing ->
+        -- No next custom error, finally yield all other errors
+        pure (maybe empty (pure . ParseResultError . ParseErrorBundle) (NESeq.nonEmptySeq (beforeEs <> afterEs)))
+      Just sep ->
+        -- Found custom error - handle it
+        goHandle s0 beforeEs sep
 
-    goHandle s0 beforeEs (SeqPartition nextBeforeEs targetE (_, e) afterEs) =
-      case filterer e of
-        Nothing ->
-          -- Not handling error;  - find next custom error
-          goSplit s0 (beforeEs <> (targetE :<| nextBeforeEs)) afterEs
-        Just b -> do
-          -- NOTE(ejconlon) We resume parsing at the start state s0 (captured at catchError invocation)
-          -- Is it reasonable to support parsing at the error state? (This is in the SeqPartition wildcard above)
-          mres <- runParserT (handler b) s0
-          case mres of
-            Nothing ->
-              -- No results from handled error - find next custom error
-              goSplit s0 (beforeEs <> nextBeforeEs) afterEs
-            Just res ->
-              case res of
-                ParseResultSuccess _ -> pure mres
-                ParseResultError (ParseErrorBundle es) ->
-                  -- Add to list of errors and find next custom error
-                  goSplit s0 (beforeEs <> nextBeforeEs <> NESeq.toSeq es) afterEs
+  goHandle s0 beforeEs (SeqPartition nextBeforeEs targetE (_, e) afterEs) =
+    case filterer e of
+      Nothing ->
+        -- Not handling error;  - find next custom error
+        goSplit s0 (beforeEs <> (targetE :<| nextBeforeEs)) afterEs
+      Just b -> do
+        -- NOTE(ejconlon) We resume parsing at the start state s0 (captured at catchError invocation)
+        -- Is it reasonable to support parsing at the error state? (This is in the SeqPartition wildcard above)
+        mres <- runParserT (handler b) s0
+        case mres of
+          Nothing ->
+            -- No results from handled error - find next custom error
+            goSplit s0 (beforeEs <> nextBeforeEs) afterEs
+          Just res ->
+            case res of
+              ParseResultSuccess _ -> pure mres
+              ParseResultError (ParseErrorBundle es) ->
+                -- Add to list of errors and find next custom error
+                goSplit s0 (beforeEs <> nextBeforeEs <> NESeq.toSeq es) afterEs
 
 -- | Throws a custom error
 throwParser :: Monad m => e -> ParserT l s e m a
@@ -241,7 +256,8 @@ optionalParser parser = defaultParser Nothing (fmap Just parser)
 
 -- | Run the parser speculatively and return results. Does not advance state or throw errors.
 reflectParser :: Monad m => ParserT l s e m a -> ParserT l s e m (Maybe (ParseResult l s e a))
-reflectParser parser = ParserT go where
+reflectParser parser = ParserT go
+ where
   go s = do
     mres <- runParserT parser s
     pure (Just (ParseResultSuccess (ParseSuccess s mres)))
@@ -250,7 +266,8 @@ reflectParser parser = ParserT go where
 -- because this includes stream errors, not just custom errors.
 -- If you want more fine-grained control, use 'reflectParser' and map over the results.
 silenceParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
-silenceParser parser = ParserT (fmap go . runParserT parser) where
+silenceParser parser = ParserT (fmap go . runParserT parser)
+ where
   go mres =
     case mres of
       Just (ParseResultSuccess _) -> mres
@@ -259,7 +276,8 @@ silenceParser parser = ParserT (fmap go . runParserT parser) where
 -- | Yield the results of the given parser, but rewind back to the starting state.
 -- Note that these results may contain errors, so you may want to stifle them with 'silenceParser', for example.
 lookAheadParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
-lookAheadParser parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
+lookAheadParser parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s))
+ where
   go s res =
     case res of
       ParseResultError es -> ParseResultError es
@@ -268,7 +286,8 @@ lookAheadParser parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)
 -- | Push the label and current state onto the parse error mark stack.
 -- Useful to delimit named sub-spans for error reporting.
 markParser :: Monad m => Maybe l -> ParserT l s e m a -> ParserT l s e m a
-markParser ml parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s)) where
+markParser ml parser = ParserT (\s -> fmap (fmap (go s)) (runParserT parser s))
+ where
   go s res =
     case res of
       ParseResultError (ParseErrorBundle es) -> ParseResultError (ParseErrorBundle (fmap (markParseError (Mark ml s)) es))
@@ -285,7 +304,8 @@ markWithOptStateParser ml g = markWithStateParser ml (\s -> maybe (Nothing, s) (
 -- | Clear marks from parse errors. You can mark immediately after to widen the narrowest
 -- marked span to the range you want to report.
 unmarkParser :: Monad m => ParserT l s e m a -> ParserT l s e m a
-unmarkParser parser = ParserT (fmap (fmap go) . runParserT parser) where
+unmarkParser parser = ParserT (fmap (fmap go) . runParserT parser)
+ where
   go res =
     case res of
       ParseResultError (ParseErrorBundle es) -> ParseResultError (ParseErrorBundle (fmap unmarkParseError es))
@@ -307,7 +327,8 @@ commitParser checker parser = do
 -- are errors in the first. You might use this on the outside of a complex parser with
 -- a fallback to 'fail' to indicate that there are no matches.
 onEmptyParser :: Parser l s e a -> Parser l s e a -> Parser l s e a
-onEmptyParser parser fallback = ParserT (\s -> runParserT parser s >>= go s) where
+onEmptyParser parser fallback = ParserT (\s -> runParserT parser s >>= go s)
+ where
   go s mres =
     case mres of
       Nothing -> runParserT fallback s
@@ -320,10 +341,12 @@ data SeqPartition a b = SeqPartition
   , spKey :: !a
   , spValue :: !b
   , spAfter :: !(Seq a)
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 seqPartition :: (a -> Maybe b) -> Seq a -> Maybe (SeqPartition a b)
-seqPartition f = go Empty where
+seqPartition f = go Empty
+ where
   go before after =
     case after of
       Empty -> Nothing

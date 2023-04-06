@@ -19,7 +19,8 @@ module SimpleParser.Result
   , matchSoleParseError
   , ParseSuccess (..)
   , ParseResult (..)
-  ) where
+  )
+where
 
 import Control.Exception (Exception)
 import Data.Foldable (toList)
@@ -31,8 +32,8 @@ import Data.Typeable (Typeable)
 import SimpleParser.Stack (Stack (..), bottomStack, bottomUpStack, emptyStack, pushStack, topStack)
 import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
-data RawError chunk token =
-    RawErrorMatchEnd !token
+data RawError chunk token
+  = RawErrorMatchEnd !token
   | RawErrorAnyToken
   | RawErrorAnyChunk
   | RawErrorSatisfyToken !(Maybe token)
@@ -49,24 +50,27 @@ newtype StreamError s = StreamError
   }
 
 deriving instance (Eq (Token s), Eq (Chunk s)) => Eq (StreamError s)
+
 deriving instance (Show (Token s), Show (Chunk s)) => Show (StreamError s)
 
 coerceStreamError :: (Chunk s ~ Chunk t, Token s ~ Token t) => StreamError s -> StreamError t
 coerceStreamError = StreamError . unStreamError
 
-data CompoundError s e =
-    CompoundErrorStream !(StreamError s)
+data CompoundError s e
+  = CompoundErrorStream !(StreamError s)
   | CompoundErrorFail !Text
   | CompoundErrorCustom !e
   deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq (Token s), Eq (Chunk s), Eq e) => Eq (CompoundError s e)
+
 deriving instance (Show (Token s), Show (Chunk s), Show e) => Show (CompoundError s e)
 
 data Mark l s = Mark
   { markLabel :: !(Maybe l)
   , markState :: !s
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 type MarkStack l s = Stack (Mark l s)
 
@@ -81,11 +85,22 @@ data ParseError l s e = ParseError
   }
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseError l s e)
+
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseError l s e)
 
-instance (
-  Typeable l, Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable e,
-  Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Exception (ParseError l s e)
+instance
+  ( Typeable l
+  , Typeable s
+  , Typeable (Token s)
+  , Typeable (Chunk s)
+  , Typeable e
+  , Show l
+  , Show s
+  , Show (Token s)
+  , Show (Chunk s)
+  , Show e
+  )
+  => Exception (ParseError l s e)
 
 -- | Returns the resumption point of the 'ParseError'.
 -- If it has been marked, we use that, otherwise we assume it starts at the exact error point.
@@ -98,15 +113,16 @@ parseErrorLabels = markStackLabels . peMarkStack
 
 -- | Updates a 'ParseError' with a resumption point.
 markParseError :: Mark l s -> ParseError l s e -> ParseError l s e
-markParseError s pe = pe { peMarkStack = pushStack s (peMarkStack pe) }
+markParseError s pe = pe {peMarkStack = pushStack s (peMarkStack pe)}
 
 -- | Clears marks from a 'ParseError'.
 unmarkParseError :: ParseError l s e -> ParseError l s e
-unmarkParseError pe = pe { peMarkStack = emptyStack }
+unmarkParseError pe = pe {peMarkStack = emptyStack}
 
 -- | Returns the narrowest span
 parseErrorNarrowestSpan :: PosStream s => ParseError l s e -> (Maybe l, Span (Pos s))
-parseErrorNarrowestSpan pe = (ml, Span startPos endPos) where
+parseErrorNarrowestSpan pe = (ml, Span startPos endPos)
+ where
   endPos = streamViewPos (peEndState pe)
   (ml, startPos) = maybe (Nothing, endPos) (\(Mark mx s) -> (mx, streamViewPos s)) (bottomStack (peMarkStack pe))
 
@@ -121,16 +137,28 @@ parseErrorEnclosingLabels pe =
 data ParseSuccess s a = ParseSuccess
   { psEndState :: !s
   , psValue :: !a
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
-newtype ParseErrorBundle l s e = ParseErrorBundle { unParseErrorBundle :: NESeq (ParseError l s e) }
+newtype ParseErrorBundle l s e = ParseErrorBundle {unParseErrorBundle :: NESeq (ParseError l s e)}
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e) => Eq (ParseErrorBundle l s e)
+
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Show (ParseErrorBundle l s e)
 
-instance (
-  Typeable l, Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable e,
-  Show l, Show s, Show (Token s), Show (Chunk s), Show e) => Exception (ParseErrorBundle l s e)
+instance
+  ( Typeable l
+  , Typeable s
+  , Typeable (Token s)
+  , Typeable (Chunk s)
+  , Typeable e
+  , Show l
+  , Show s
+  , Show (Token s)
+  , Show (Chunk s)
+  , Show e
+  )
+  => Exception (ParseErrorBundle l s e)
 
 -- | Lists all errors in the bundle.
 listParseErrors :: ParseErrorBundle l s e -> [ParseError l s e]
@@ -145,10 +173,11 @@ matchSoleParseError (ParseErrorBundle es) =
     e :<|| Empty -> Just e
     _ -> Nothing
 
-data ParseResult l s e a =
-    ParseResultError !(ParseErrorBundle l s e)
+data ParseResult l s e a
+  = ParseResultError !(ParseErrorBundle l s e)
   | ParseResultSuccess !(ParseSuccess s a)
   deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq l, Eq s, Eq (Token s), Eq (Chunk s), Eq e, Eq a) => Eq (ParseResult l s e a)
+
 deriving instance (Show l, Show s, Show (Token s), Show (Chunk s), Show e, Show a) => Show (ParseResult l s e a)

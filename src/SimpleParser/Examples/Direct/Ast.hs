@@ -12,7 +12,8 @@ module SimpleParser.Examples.Direct.Ast
   , astParser
   , lexAstParser
   , identAstParser
-  ) where
+  )
+where
 
 import Control.Monad (ap, void)
 import Control.Monad.Except (MonadError (..))
@@ -21,13 +22,30 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq)
 import Data.Text (Text)
-import SimpleParser (Chunk, EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (MatchCase), Parser,
-                     TextLabel, TextualStream, anyToken, betweenParser, consumeMatch, greedyStarParser, lexemeParser,
-                     lookAheadMatch, matchToken, spaceParser, takeTokensWhile1, throwParser)
+import SimpleParser
+  ( Chunk
+  , EmbedTextLabel (..)
+  , ExplainLabel (..)
+  , MatchBlock (..)
+  , MatchCase (MatchCase)
+  , Parser
+  , TextLabel
+  , TextualStream
+  , anyToken
+  , betweenParser
+  , consumeMatch
+  , greedyStarParser
+  , lexemeParser
+  , lookAheadMatch
+  , matchToken
+  , spaceParser
+  , takeTokensWhile1
+  , throwParser
+  )
 import qualified Text.Builder as TB
 
-data AstLabel =
-    AstLabelEmbedText !TextLabel
+data AstLabel
+  = AstLabelEmbedText !TextLabel
   | AstLabelCtorList
   | AstLabelCtorHead
   | AstLabelCtorBody !Text
@@ -47,10 +65,11 @@ instance EmbedTextLabel AstLabel where
   embedTextLabel = AstLabelEmbedText
 
 type AstParserC s = (TextualStream s, Chunk s ~ Text)
+
 type AstParserM s e a = Parser AstLabel s e a
 
-data CtorRes e a =
-    CtorResFail !String
+data CtorRes e a
+  = CtorResFail !String
   | CtorResErr !e
   | CtorResVal !a
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
@@ -122,13 +141,18 @@ astParser :: AstParserC s => AstParserM s e t -> (AstParserM s e t -> CtorDefns 
 astParser mkAtom mkCtors = let p = recAstParser (Defns mkAtom (mkCtors p)) in p
 
 recAstParser :: AstParserC s => Defns s e t -> AstParserM s e t
-recAstParser defns = lookAheadMatch block where
-  block = MatchBlock anyToken (lexAstParser (defAtoms defns))
-    [ MatchCase (Just AstLabelCtorList) (== '(') (ctorDefnsAstParser (defCtors defns))
-    ]
+recAstParser defns = lookAheadMatch block
+ where
+  block =
+    MatchBlock
+      anyToken
+      (lexAstParser (defAtoms defns))
+      [ MatchCase (Just AstLabelCtorList) (== '(') (ctorDefnsAstParser (defCtors defns))
+      ]
 
 ctorDefnsAstParser :: AstParserC s => CtorDefns s e t -> AstParserM s e t
-ctorDefnsAstParser ctors = betweenParser openParenP closeParenP (consumeMatch block) where
+ctorDefnsAstParser ctors = betweenParser openParenP closeParenP (consumeMatch block)
+ where
   block = MatchBlock (identAstParser (Just AstLabelCtorHead)) (fail "Could not match constructor") cases
   cases = flip fmap (Map.toList ctors) $ \(t, c) ->
     MatchCase (Just (AstLabelCtorBody t)) (== t) (ctorAstParser c)

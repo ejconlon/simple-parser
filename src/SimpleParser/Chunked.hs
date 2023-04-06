@@ -1,7 +1,8 @@
 module SimpleParser.Chunked
   ( Chunked (..)
   , TextualChunked (..)
-  ) where
+  )
+where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS

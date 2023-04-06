@@ -12,7 +12,8 @@ module SimpleParser.Explain
   , explainParseError
   , buildParseErrorExplanation
   , buildAllParseErrorExplanations
-  ) where
+  )
+where
 
 import Control.Monad (join)
 import Data.Foldable (toList)
@@ -21,8 +22,14 @@ import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import Data.Void (Void, absurd)
 import SimpleParser.Common (CompoundTextLabel (..), TextLabel (..))
-import SimpleParser.Result (CompoundError (..), ParseError (..), RawError (..), StreamError (..),
-                            parseErrorEnclosingLabels, parseErrorNarrowestSpan)
+import SimpleParser.Result
+  ( CompoundError (..)
+  , ParseError (..)
+  , RawError (..)
+  , StreamError (..)
+  , parseErrorEnclosingLabels
+  , parseErrorNarrowestSpan
+  )
 import SimpleParser.Stream (HasLinePos (..), PosStream (..), Span (..), Stream (..))
 import Text.Builder (Builder)
 import qualified Text.Builder as TB
@@ -54,7 +61,7 @@ instance TextBuildable a => TextBuildable (Seq a) where
   buildText = buildTextFromList . toList
 
 -- | Deriving-Via wrapper for 'TextBuildable' for types with 'Show'
-newtype ShowTextBuildable a = ShowTextBuildable { unShowTextBuildable :: a }
+newtype ShowTextBuildable a = ShowTextBuildable {unShowTextBuildable :: a}
 
 instance Show a => TextBuildable (ShowTextBuildable a) where
   buildText = TB.string . show . unShowTextBuildable
@@ -81,11 +88,12 @@ instance ExplainLabel l => ExplainLabel (CompoundTextLabel l) where
       CompoundTextLabelText l -> explainLabel l
       CompoundTextLabelCustom l -> explainLabel l
 
-data ErrorExplanation  = ErrorExplanation
+data ErrorExplanation = ErrorExplanation
   { eeReason :: !Text
   , eeExpected :: !(Maybe Text)
   , eeActual :: !(Maybe Text)
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 class ExplainError e where
   explainError :: e -> ErrorExplanation
@@ -148,7 +156,8 @@ data ParseErrorExplanation p = ParseErrorExplanation
   , peeContext :: !(Seq Text)
   , peeDetails :: !(Maybe Text)
   , peeErrExp :: !ErrorExplanation
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 explainParseError :: (TextBuildable (Token s), TextBuildable (Chunk s), Explainable l s e) => ParseError l s e -> ParseErrorExplanation (Pos s)
 explainParseError pe =
@@ -156,7 +165,7 @@ explainParseError pe =
       context = fmap explainLabelText (parseErrorEnclosingLabels pe)
       mayDetails = fmap explainLabelText mayLab
       errExp = explainError (peError pe)
-  in ParseErrorExplanation sp context mayDetails errExp
+  in  ParseErrorExplanation sp context mayDetails errExp
 
 buildSpan :: HasLinePos p => Span p -> Builder
 buildSpan (Span p1 p2) =
@@ -166,26 +175,28 @@ buildSpan (Span p1 p2) =
       c2 = viewCol p2
       r1 = TB.decimal (succ l1) <> ":" <> TB.decimal (succ c1)
       r2 = TB.decimal (succ l2) <> ":" <> TB.decimal (succ c2)
-  in if l1 == l2 && c1 == c2
-    then r1
-    else r1 <> "-" <> r2
+  in  if l1 == l2 && c1 == c2
+        then r1
+        else r1 <> "-" <> r2
 
 buildErrorExplanation :: Maybe Builder -> ErrorExplanation -> [Builder]
-buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual) = join
-  [ ["[Reason  ] " <> TB.text reason]
-  , maybe [] (\de -> ["[Details ] " <> de]) mayDetails
-  , maybe [] (\ex -> ["[Expected] " <> TB.text ex]) mayExpected
-  , maybe [] (\ac -> ["[Actual  ] " <> TB.text ac]) mayActual
-  ]
+buildErrorExplanation mayDetails (ErrorExplanation reason mayExpected mayActual) =
+  join
+    [ ["[Reason  ] " <> TB.text reason]
+    , maybe [] (\de -> ["[Details ] " <> de]) mayDetails
+    , maybe [] (\ex -> ["[Expected] " <> TB.text ex]) mayExpected
+    , maybe [] (\ac -> ["[Actual  ] " <> TB.text ac]) mayActual
+    ]
 
 buildParseErrorExplanation :: HasLinePos p => ParseErrorExplanation p -> Builder
 buildParseErrorExplanation (ParseErrorExplanation sp context mayDetails errExp) =
-  let hd = join
-        [ ["[Pos     ] " <> buildSpan sp]
-        , ["[Context ] " <> TB.intercalate " > " (fmap TB.text (toList context)) | not (Seq.null context)]
-        ]
+  let hd =
+        join
+          [ ["[Pos     ] " <> buildSpan sp]
+          , ["[Context ] " <> TB.intercalate " > " (fmap TB.text (toList context)) | not (Seq.null context)]
+          ]
       tl = buildErrorExplanation (fmap TB.text mayDetails) errExp
-  in TB.intercalate "\n" (hd ++ tl)
+  in  TB.intercalate "\n" (hd ++ tl)
 
 buildAllParseErrorExplanations :: (HasLinePos p, Foldable f) => f (ParseErrorExplanation p) -> Builder
 buildAllParseErrorExplanations = TB.intercalate "\n\n" . fmap buildParseErrorExplanation . toList

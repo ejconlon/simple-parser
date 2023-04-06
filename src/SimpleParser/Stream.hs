@@ -14,7 +14,8 @@ module SimpleParser.Stream
   , newLinePosStream
   , Span (..)
   , HasLinePos (..)
-  ) where
+  )
+where
 
 import Data.Bifunctor (first, second)
 import Data.ByteString (ByteString)
@@ -38,20 +39,22 @@ class Chunked (Chunk s) (Token s) => Stream s where
   streamTake1 :: s -> Maybe (Token s, s)
 
   streamTakeN :: Int -> s -> Maybe (Chunk s, s)
-  streamTakeN = go mempty where
+  streamTakeN = go mempty
+   where
     ret acc s = Just (revTokensToChunk acc, s)
     go !acc !n !s
       | n <= 0 = ret acc s
       | otherwise =
           case streamTake1 s of
             Nothing -> if null acc then Nothing else ret acc s
-            Just (t, s') -> go (t:acc) (n - 1) s'
+            Just (t, s') -> go (t : acc) (n - 1) s'
 
   streamTakeWhile :: (Token s -> Bool) -> s -> (Chunk s, s)
-  streamTakeWhile p = go mempty where
+  streamTakeWhile p = go mempty
+   where
     go !acc !s =
       case streamTake1 s of
-        Just (t, s') | p t -> go (t:acc) s'
+        Just (t, s') | p t -> go (t : acc) s'
         _ -> (revTokensToChunk acc, s)
 
   streamDropN :: Int -> s -> Maybe (Int, s)
@@ -84,7 +87,7 @@ instance Stream (Seq a) where
     | otherwise = Just (Seq.splitAt n s)
   streamTakeWhile = Seq.spanl
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 instance Stream Text where
   type Chunk Text = Text
@@ -97,7 +100,7 @@ instance Stream Text where
     | otherwise = Just (T.splitAt n s)
   streamTakeWhile = T.span
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 instance Stream TL.Text where
   type Chunk TL.Text = TL.Text
@@ -110,7 +113,7 @@ instance Stream TL.Text where
     | otherwise = Just (TL.splitAt (fromIntegral n) s)
   streamTakeWhile = TL.span
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 instance Stream ByteString where
   type Chunk ByteString = ByteString
@@ -123,7 +126,7 @@ instance Stream ByteString where
     | otherwise = Just (BS.splitAt n s)
   streamTakeWhile = BS.span
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 instance Stream BSL.ByteString where
   type Chunk BSL.ByteString = BSL.ByteString
@@ -136,7 +139,7 @@ instance Stream BSL.ByteString where
     | otherwise = Just (BSL.splitAt (fromIntegral n) s)
   streamTakeWhile = BSL.span
 
-  -- TODO(ejconlon) Specialize drops
+-- TODO(ejconlon) Specialize drops
 
 -- | 'PosStream' adds position tracking to a 'Stream'.
 class Stream s => PosStream s where
@@ -144,30 +147,33 @@ class Stream s => PosStream s where
 
   streamViewPos :: s -> Pos s
 
-newtype Offset = Offset { unOffset :: Int }
+newtype Offset = Offset {unOffset :: Int}
   deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
 
 -- | Stream wrapper that maintains an offset position.
 data OffsetStream s = OffsetStream
   { osOffset :: !Offset
   , osState :: !s
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance Stream s => Stream (OffsetStream s) where
   type Chunk (OffsetStream s) = Chunk s
   type Token (OffsetStream s) = Token s
 
   streamTake1 (OffsetStream o s) = fmap (second (OffsetStream (succ o))) (streamTake1 s)
-  streamTakeN n (OffsetStream (Offset x) s) = fmap go (streamTakeN n s) where
+  streamTakeN n (OffsetStream (Offset x) s) = fmap go (streamTakeN n s)
+   where
     go (a, b) = (a, OffsetStream (Offset (x + chunkLength a)) b)
   streamTakeWhile pcate (OffsetStream (Offset x) s) =
     let (a, b) = streamTakeWhile pcate s
-    in (a, OffsetStream (Offset (x + chunkLength a)) b)
-  streamDropN n (OffsetStream (Offset x) s) = fmap go (streamDropN n s) where
+    in  (a, OffsetStream (Offset (x + chunkLength a)) b)
+  streamDropN n (OffsetStream (Offset x) s) = fmap go (streamDropN n s)
+   where
     go (m, b) = (m, OffsetStream (Offset (x + m)) b)
   streamDropWhile pcate (OffsetStream (Offset x) s) =
     let (m, b) = streamDropWhile pcate s
-    in (m, OffsetStream (Offset (x + m)) b)
+    in  (m, OffsetStream (Offset (x + m)) b)
 
 instance Stream s => PosStream (OffsetStream s) where
   type Pos (OffsetStream s) = Offset
@@ -177,10 +183,10 @@ instance Stream s => PosStream (OffsetStream s) where
 newOffsetStream :: s -> OffsetStream s
 newOffsetStream = OffsetStream 0
 
-newtype Line = Line { unLine :: Int }
+newtype Line = Line {unLine :: Int}
   deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
 
-newtype Col = Col { unCol :: Int }
+newtype Col = Col {unCol :: Int}
   deriving newtype (Eq, Show, Ord, Enum, Num, Real, Integral)
 
 -- | A 0-based line/col position in a character-based stream.
@@ -188,7 +194,8 @@ data LinePos = LinePos
   { lpOffset :: !Offset
   , lpLine :: !Line
   , lpCol :: !Col
-  } deriving (Eq, Show, Ord)
+  }
+  deriving (Eq, Show, Ord)
 
 -- | The canonical initial position.
 initLinePos :: LinePos
@@ -206,20 +213,22 @@ incrLinePosChunk = foldl' incrLinePosToken
 data LinePosStream s = LinePosStream
   { lpsLinePos :: !LinePos
   , lpsState :: !s
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 instance (Stream s, Token s ~ Char) => Stream (LinePosStream s) where
   type Chunk (LinePosStream s) = Chunk s
   type Token (LinePosStream s) = Token s
 
   streamTake1 (LinePosStream p s) = fmap (\(a, b) -> (a, LinePosStream (incrLinePosToken p a) b)) (streamTake1 s)
-  streamTakeN n (LinePosStream p s) = fmap go (streamTakeN n s) where
+  streamTakeN n (LinePosStream p s) = fmap go (streamTakeN n s)
+   where
     go (a, b) = (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
   streamTakeWhile pcate (LinePosStream p s) =
     let (a, b) = streamTakeWhile pcate s
-    in (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
+    in  (a, LinePosStream (incrLinePosChunk p (chunkToTokens a)) b)
 
-  -- Drops can't be specialized because we need to examine each character for newlines.
+-- Drops can't be specialized because we need to examine each character for newlines.
 
 instance (Stream s, Token s ~ Char) => PosStream (LinePosStream s) where
   type Pos (LinePosStream s) = LinePos
@@ -233,7 +242,8 @@ newLinePosStream = LinePosStream initLinePos
 data Span p = Span
   { spanStart :: !p
   , spanEnd :: !p
-  } deriving (Eq, Show, Ord)
+  }
+  deriving (Eq, Show, Ord)
 
 -- | Allows projections into (Line, Col) for more exotic stream positions.
 class HasLinePos p where

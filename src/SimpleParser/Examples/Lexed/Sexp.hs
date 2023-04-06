@@ -13,7 +13,8 @@ module SimpleParser.Examples.Lexed.Sexp
   , SexpParserM
   , sexpParser
   , runSexpParser
-  ) where
+  )
+where
 
 import Control.Applicative (empty)
 import Control.Monad (void)
@@ -24,17 +25,44 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Typeable (Typeable)
 import Data.Void (Void)
-import SimpleParser (Chunked (..), EmbedTextLabel (..), ExplainLabel (..), MatchBlock (..), MatchCase (..), Parser,
-                     PosStream (..), ShowTextBuildable (..), Stream (..), TextBuildable (..), TextLabel, TextualStream,
-                     anyToken, applySign, betweenParser, escapedStringParser, greedyStarParser, lexemeParser,
-                     lookAheadMatch, matchToken, numParser, packChunk, popChunk, popToken, runParserLexed, satisfyToken,
-                     signParser, signedNumStartPred, spaceParser, takeTokensWhile)
+import SimpleParser
+  ( Chunked (..)
+  , EmbedTextLabel (..)
+  , ExplainLabel (..)
+  , MatchBlock (..)
+  , MatchCase (..)
+  , Parser
+  , PosStream (..)
+  , ShowTextBuildable (..)
+  , Stream (..)
+  , TextBuildable (..)
+  , TextLabel
+  , TextualStream
+  , anyToken
+  , applySign
+  , betweenParser
+  , escapedStringParser
+  , greedyStarParser
+  , lexemeParser
+  , lookAheadMatch
+  , matchToken
+  , numParser
+  , packChunk
+  , popChunk
+  , popToken
+  , runParserLexed
+  , satisfyToken
+  , signParser
+  , signedNumStartPred
+  , spaceParser
+  , takeTokensWhile
+  )
 import SimpleParser.Examples.Common.Sexp (Atom (..), Sexp (..), SexpF (..))
 
 -- First, our tokenizer:
 
-data SexpTokLabel =
-    SexpTokLabelIdentStart
+data SexpTokLabel
+  = SexpTokLabelIdentStart
   | SexpTokLabelEmbedText !TextLabel
   deriving (Eq, Show)
 
@@ -51,8 +79,8 @@ type SexpTokParserC s = (PosStream s, TextualStream s)
 
 type SexpTokParserM s a = Parser SexpTokLabel s Void a
 
-data SexpTok =
-    SexpTokOpenParen
+data SexpTok
+  = SexpTokOpenParen
   | SexpTokCloseParen
   | SexpTokAtom !Atom
   deriving stock (Eq, Show)
@@ -116,21 +144,29 @@ identAtomTP :: SexpTokParserC s => SexpTokParserM s Atom
 identAtomTP = fmap AtomIdent identifierTP
 
 atomTP :: SexpTokParserC s => SexpTokParserM s Atom
-atomTP = lexTP (lookAheadMatch block) where
-  block = MatchBlock chunk1 (fail "failed to parse sexp atom")
-    [ MatchCase Nothing ((== '"') . T.head) (fmap AtomString stringTP)
-    , MatchCase Nothing (unaryIdentPred '+') identAtomTP
-    , MatchCase Nothing (unaryIdentPred '-') identAtomTP
-    , MatchCase Nothing (signedNumStartPred . T.head) numAtomTP
-    , MatchCase Nothing (identStartPred . T.head) identAtomTP
-    ]
+atomTP = lexTP (lookAheadMatch block)
+ where
+  block =
+    MatchBlock
+      chunk1
+      (fail "failed to parse sexp atom")
+      [ MatchCase Nothing ((== '"') . T.head) (fmap AtomString stringTP)
+      , MatchCase Nothing (unaryIdentPred '+') identAtomTP
+      , MatchCase Nothing (unaryIdentPred '-') identAtomTP
+      , MatchCase Nothing (signedNumStartPred . T.head) numAtomTP
+      , MatchCase Nothing (identStartPred . T.head) identAtomTP
+      ]
 
 sexpTokParser :: SexpTokParserC s => SexpTokParserM s SexpTok
-sexpTokParser= lookAheadMatch block where
-  block = MatchBlock anyToken (fmap SexpTokAtom atomTP)
-    [ MatchCase Nothing (== '(') (SexpTokOpenParen <$ openParenTP)
-    , MatchCase Nothing (== ')') (SexpTokCloseParen <$ closeParenTP)
-    ]
+sexpTokParser = lookAheadMatch block
+ where
+  block =
+    MatchBlock
+      anyToken
+      (fmap SexpTokAtom atomTP)
+      [ MatchCase Nothing (== '(') (SexpTokOpenParen <$ openParenTP)
+      , MatchCase Nothing (== ')') (SexpTokCloseParen <$ closeParenTP)
+      ]
 
 -- Now the Sexp parser itself:
 
@@ -139,12 +175,12 @@ type SexpParserC s = (Stream s, Token s ~ SexpTok)
 type SexpParserM s a = Parser Void s Void a
 
 isOpenParenTok, isCloseParenTok, isAtomTok :: SexpTok -> Bool
-isOpenParenTok = \case { SexpTokOpenParen -> True; _ -> False }
-isCloseParenTok = \case { SexpTokCloseParen -> True; _ -> False }
-isAtomTok = \case { SexpTokAtom _ -> True; _ -> False }
+isOpenParenTok = \case SexpTokOpenParen -> True; _ -> False
+isCloseParenTok = \case SexpTokCloseParen -> True; _ -> False
+isAtomTok = \case SexpTokAtom _ -> True; _ -> False
 
 atomP :: SexpParserC s => SexpParserM s Atom
-atomP = popToken >>= \case { Just (SexpTokAtom a) -> pure a; _ -> fail "invalid atom" }
+atomP = popToken >>= \case Just (SexpTokAtom a) -> pure a; _ -> fail "invalid atom"
 
 openParenP, closeParenP :: SexpParserC s => SexpParserM s ()
 openParenP = void (matchToken SexpTokOpenParen)
@@ -154,20 +190,34 @@ listP :: SexpParserC s => SexpParserM s a -> SexpParserM s (Seq a)
 listP root = betweenParser openParenP closeParenP (greedyStarParser root)
 
 recSexpParser :: SexpParserC s => SexpParserM s a -> SexpParserM s (SexpF a)
-recSexpParser root = lookAheadMatch block where
-  block = MatchBlock anyToken empty
-    [ MatchCase Nothing isOpenParenTok (fmap SexpList (listP root))
-    , MatchCase Nothing isCloseParenTok (fail "invalid close paren")
-    , MatchCase Nothing isAtomTok (fmap SexpAtom atomP)
-    ]
+recSexpParser root = lookAheadMatch block
+ where
+  block =
+    MatchBlock
+      anyToken
+      empty
+      [ MatchCase Nothing isOpenParenTok (fmap SexpList (listP root))
+      , MatchCase Nothing isCloseParenTok (fail "invalid close paren")
+      , MatchCase Nothing isAtomTok (fmap SexpAtom atomP)
+      ]
 
 sexpParser :: SexpParserC s => SexpParserM s Sexp
 sexpParser = let p = fmap Sexp (recSexpParser p) in p
 
 -- And combined:
 
-runSexpParser :: (
-  Typeable s, Typeable (Token s), Typeable (Chunk s), Typeable (Pos s),
-  Show s, Show (Token s), Show (Chunk s), Show (Pos s),
-  SexpTokParserC s, MonadThrow m) => s -> m Sexp
+runSexpParser
+  :: ( Typeable s
+     , Typeable (Token s)
+     , Typeable (Chunk s)
+     , Typeable (Pos s)
+     , Show s
+     , Show (Token s)
+     , Show (Chunk s)
+     , Show (Pos s)
+     , SexpTokParserC s
+     , MonadThrow m
+     )
+  => s
+  -> m Sexp
 runSexpParser = runParserLexed sexpTokParser id sexpParser

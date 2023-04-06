@@ -23,7 +23,8 @@ module SimpleParser.Common
   , escapedStringParser
   , spanParser
   , getStreamPos
-  ) where
+  )
+where
 
 import Control.Monad (void)
 import Control.Monad.State (get, gets)
@@ -33,14 +34,21 @@ import Data.List (foldl')
 import Data.Scientific (Scientific)
 import qualified Data.Scientific as Sci
 import SimpleParser.Chunked (Chunked (..))
-import SimpleParser.Input (dropTokensWhile, dropTokensWhile1, foldTokensWhile, matchToken, peekToken, popToken,
-                           takeTokensWhile1)
+import SimpleParser.Input
+  ( dropTokensWhile
+  , dropTokensWhile1
+  , foldTokensWhile
+  , matchToken
+  , peekToken
+  , popToken
+  , takeTokensWhile1
+  )
 import SimpleParser.Parser (ParserT, defaultParser, greedyStarParser, optionalParser, orParser)
 import SimpleParser.Stream (PosStream (..), Span (..), Stream (..))
 
 -- | Enumeration of common labels in textual parsing.
-data TextLabel =
-    TextLabelSpace
+data TextLabel
+  = TextLabelSpace
   | TextLabelHSpace
   | TextLabelDigit
   deriving (Eq, Show)
@@ -52,8 +60,8 @@ instance EmbedTextLabel TextLabel where
   embedTextLabel = id
 
 -- | Union of text and custom labels
-data CompoundTextLabel l =
-    CompoundTextLabelText !TextLabel
+data CompoundTextLabel l
+  = CompoundTextLabelText !TextLabel
   | CompoundTextLabelCustom !l
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
@@ -61,12 +69,13 @@ instance EmbedTextLabel (CompoundTextLabel l) where
   embedTextLabel = CompoundTextLabelText
 
 -- | Yields the maximal list of separated items. May return an empty list.
-sepByParser :: (Chunked seq elem, Monad m) =>
-  -- | How to parse item
-  ParserT l s e m elem ->
-  -- | How to parse separator
-  ParserT l s e m () ->
-  ParserT l s e m seq
+sepByParser
+  :: (Chunked seq elem, Monad m)
+  => ParserT l s e m elem
+  -- ^ How to parse item
+  -> ParserT l s e m ()
+  -- ^ How to parse separator
+  -> ParserT l s e m seq
 sepByParser thing sep = do
   ma <- optionalParser thing
   case ma of
@@ -76,14 +85,15 @@ sepByParser thing sep = do
       pure (consChunk a as)
 
 -- | Parses between start and end markers.
-betweenParser :: Monad m =>
-  -- | How to parse start
-  ParserT l s e m () ->
-  -- | How to parse end
-  ParserT l s e m () ->
-  -- | How to parse inside
-  ParserT l s e m a ->
-  ParserT l s e m a
+betweenParser
+  :: Monad m
+  => ParserT l s e m ()
+  -- ^ How to parse start
+  -> ParserT l s e m ()
+  -- ^ How to parse end
+  -> ParserT l s e m a
+  -- ^ How to parse inside
+  -> ParserT l s e m a
 betweenParser start end thing = do
   start
   a <- thing
@@ -91,12 +101,13 @@ betweenParser start end thing = do
   pure a
 
 -- | A wrapper for lexemes (equivalent to Megaparsec's 'lexeme').
-lexemeParser :: Monad m =>
-  -- | How to consume white space after lexeme
-  ParserT l s e m () ->
-  -- | How to parse actual lexeme
-  ParserT l s e m a ->
-  ParserT l s e m a
+lexemeParser
+  :: Monad m
+  => ParserT l s e m ()
+  -- ^ How to consume white space after lexeme
+  -> ParserT l s e m a
+  -- ^ How to parse actual lexeme
+  -> ParserT l s e m a
 lexemeParser spc p = p <* spc
 
 -- | Consumes a newline character.
@@ -124,7 +135,8 @@ hspaceParser1 = void (dropTokensWhile1 (Just (embedTextLabel TextLabelHSpace)) i
 
 -- | Parses an integer in decimal representation (equivalent to Megaparsec's 'decimal').
 decimalParser :: (EmbedTextLabel l, Stream s, Token s ~ Char, Monad m, Num a) => ParserT l s e m a
-decimalParser = fmap mkNum (takeTokensWhile1 (Just (embedTextLabel TextLabelDigit)) isDigit) where
+decimalParser = fmap mkNum (takeTokensWhile1 (Just (embedTextLabel TextLabelDigit)) isDigit)
+ where
   mkNum = foldl' step 0 . chunkToTokens
   step a c = a * 10 + fromIntegral (digitToInt c)
 
@@ -188,13 +200,14 @@ applySign ms n =
 
 -- | Parses an optional sign character followed by a number and yields a correctly-signed
 -- number (equivalend to Megaparsec's 'signed').
-signedParser :: (Stream s, Token s ~ Char, Monad m, Num a) =>
-  -- | How to consume white space after the sign
-  ParserT l s e m () ->
-  -- | How to parse the number itself
-  ParserT l s e m a ->
-  -- | Parser for signed numbers
-  ParserT l s e m a
+signedParser
+  :: (Stream s, Token s ~ Char, Monad m, Num a)
+  => ParserT l s e m ()
+  -- ^ How to consume white space after the sign
+  -> ParserT l s e m a
+  -- ^ How to parse the number itself
+  -> ParserT l s e m a
+  -- ^ Parser for signed numbers
 signedParser spc p = do
   ms <- signParser
   spc
@@ -213,18 +226,18 @@ escapedStringParser quoteChar =
       escChar = '\\'
       go c (Pair acc esc)
         | c == escChar =
-          if esc
-            then (True, Pair (escChar:acc) False) -- Was escaped escape, append one
-            else (True, Pair acc True) -- Skip appending this esc
+            if esc
+              then (True, Pair (escChar : acc) False) -- Was escaped escape, append one
+              else (True, Pair acc True) -- Skip appending this esc
         | c == quoteChar =
-          if esc
-            then (True, Pair (c:acc) False) -- Escaped quote
-            else (False, Pair acc False) -- End of quote
+            if esc
+              then (True, Pair (c : acc) False) -- Escaped quote
+              else (False, Pair acc False) -- End of quote
         | otherwise =
-          if esc
-            then (True, Pair (c:escChar:acc) False) -- Was a non-quote esc, append both
-            else (True, Pair (c:acc) False) -- Just consume char
-  in betweenParser quoteParser quoteParser innerParser
+            if esc
+              then (True, Pair (c : escChar : acc) False) -- Was a non-quote esc, append both
+              else (True, Pair (c : acc) False) -- Just consume char
+  in  betweenParser quoteParser quoteParser innerParser
 
 -- | Adds span information to parsed values.
 spanParser :: (PosStream s, Monad m) => (Span (Pos s) -> a -> b) -> ParserT l s e m a -> ParserT l s e m b

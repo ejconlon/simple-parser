@@ -1,7 +1,5 @@
 # simple-parser
 
-[![CircleCI](https://circleci.com/gh/ejconlon/simple-parser/tree/master.svg?style=svg)](https://circleci.com/gh/ejconlon/simple-parser/tree/master)
-
 Simple parser combinators with a focus on controlled backtracking (choice with lookahead) for better error reporting. Unlike Megaparsec, this backtracks by default, supports user-defined labels for error reporting, and is very generic in the kind of structures it can parse.
 
 ## License

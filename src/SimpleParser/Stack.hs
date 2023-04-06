@@ -5,7 +5,8 @@ module SimpleParser.Stack
   , topStack
   , bottomStack
   , bottomUpStack
-  ) where
+  )
+where
 
 import Data.Sequence (Seq (..))
 
@@ -14,7 +15,8 @@ import Data.Sequence (Seq (..))
 -- fold/traverse goes from bottom of stack (most generic label) to top (most specific label).
 newtype Stack a = Stack
   { unStack :: Seq a
-  } deriving (Eq, Show, Functor, Foldable, Traversable)
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 -- | Easy constructor for the empty stack
 emptyStack :: Stack a
@@ -40,10 +42,11 @@ bottomStack (Stack s) =
 
 -- | Selects elements from the bottom of the stack to the top.
 bottomUpStack :: (a -> Maybe b) -> Stack a -> Seq b
-bottomUpStack f = go Empty . unStack where
+bottomUpStack f = go Empty . unStack
+ where
   go !acc s =
     case s of
       Empty -> acc
       a :<| s' ->
         let acc' = maybe acc (acc :|>) (f a)
-        in go acc' s'
+        in  go acc' s'

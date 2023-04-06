@@ -1,7 +1,0 @@
-cradle:
-  stack:
-    - path: "./src"
-      component: "simple-parser:lib"
-
-    - path: "./test"
-      component: "simple-parser:test:simple-parser-test"

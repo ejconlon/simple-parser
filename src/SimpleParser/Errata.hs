@@ -4,21 +4,27 @@ module SimpleParser.Errata
   ( LinePosExplainable
   , errataParseError
   , errataParseResult
-  ) where
+  )
+where
 
 import Control.Monad (join)
 import Data.Foldable (toList)
 import Data.Sequence (Seq (..))
 import qualified Data.Text as T
 import Errata (Block, PointerStyle, Style, blockMerged')
-import SimpleParser.Explain (ErrorExplanation (..), Explainable, ParseErrorExplanation (..), TextBuildable,
-                             explainParseError)
+import SimpleParser.Explain
+  ( ErrorExplanation (..)
+  , Explainable
+  , ParseErrorExplanation (..)
+  , TextBuildable
+  , explainParseError
+  )
 import SimpleParser.Result (ParseError, ParseErrorBundle (ParseErrorBundle), ParseResult (..))
 import SimpleParser.Stream (Col (..), HasLinePos (..), Line (..), Pos, Span (..), Stream (Chunk, Token))
 
 type LinePosExplainable l s e = (Explainable l s e, HasLinePos (Pos s), TextBuildable (Token s), TextBuildable (Chunk s))
 
-errataExplanation :: HasLinePos p => Style -> PointerStyle  -> FilePath -> ParseErrorExplanation p -> Block
+errataExplanation :: HasLinePos p => Style -> PointerStyle -> FilePath -> ParseErrorExplanation p -> Block
 errataExplanation bsty psty fp (ParseErrorExplanation sp context mayDetails (ErrorExplanation reason mayExpected mayActual)) =
   let Span startPos endPos = sp
       startLine = unLine (viewLine startPos)
@@ -27,25 +33,28 @@ errataExplanation bsty psty fp (ParseErrorExplanation sp context mayDetails (Err
       endCol = unCol (viewCol endPos)
       mayLabel = Just reason
       mayHeader =
-       case context of
-         Empty -> Nothing
-         _ -> Just (T.intercalate " > " (toList context))
+        case context of
+          Empty -> Nothing
+          _ -> Just (T.intercalate " > " (toList context))
       start = (startLine + 1, startCol + 1, mayLabel)
       end = (endLine + 1, endCol + 1, Nothing)
       mayBody =
         case (mayDetails, mayExpected, mayActual) of
           (Nothing, Nothing, Nothing) -> Nothing
-          _ -> Just $ T.unlines $ join
-            [ maybe [] (\de -> ["[Details ] " <> de]) mayDetails
-            , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
-            , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
-            ]
-  in blockMerged' bsty psty fp mayHeader start end mayLabel mayBody
+          _ ->
+            Just $
+              T.unlines $
+                join
+                  [ maybe [] (\de -> ["[Details ] " <> de]) mayDetails
+                  , maybe [] (\ex -> ["[Expected] " <> ex]) mayExpected
+                  , maybe [] (\ac -> ["[Actual  ] " <> ac]) mayActual
+                  ]
+  in  blockMerged' bsty psty fp mayHeader start end mayLabel mayBody
 
 errataParseError :: LinePosExplainable l s e => Style -> PointerStyle -> FilePath -> ParseError l s e -> Block
 errataParseError bsty psty fp pe =
   let pee = explainParseError pe
-  in errataExplanation bsty psty fp pee
+  in  errataExplanation bsty psty fp pee
 
 errataParseResult :: LinePosExplainable l s e => Style -> PointerStyle -> FilePath -> ParseResult l s e a -> [Block]
 errataParseResult bsty psty fp pr =
